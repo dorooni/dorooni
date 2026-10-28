@@ -2,3 +2,5 @@
 .wrangler
 .assetsignore
 wrangler.jsonc
+data
+tools
