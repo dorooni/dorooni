@@ -827,6 +827,8 @@
     .page .edit-spacer:not([data-device="m"]){ display:none !important; }
     .page [data-m-moved]{ translate:var(--m-tx, 0px) var(--m-ty, 0px) !important; position:relative; z-index:3; }
     .page [data-m-scaled]{ scale:var(--m-sx, 1) var(--m-sy, 1) !important; transform-origin:0 0 !important; }
+    .page [data-m-align]{ text-align:var(--m-ta) !important; }
+    .page [data-m-jalign]{ justify-content:var(--m-jc) !important; }
     body.edit-mode .page [data-moved]:not([data-m-moved]){ outline:none; }
     body.edit-mode .page [data-m-moved]{ outline:1px dotted color-mix(in srgb, var(--accent) 60%, transparent); outline-offset:2px; }
   }
@@ -980,6 +982,14 @@
   .edit-caret.show{ display:block; }
   .edit-caret::before{ content:"Enter: 빈 줄 넣기 · Backspace: 위 빈 줄 줄이기"; position:absolute; right:0; bottom:6px; white-space:nowrap;
     font:700 11px/1 "Gothic A1",sans-serif; color:#000; background:var(--accent); border-radius:6px; padding:4px 7px; }
+  .sel-toolbar{ position:fixed; z-index:1245; display:none; align-items:center; gap:4px; padding:5px 6px; background:#000;
+    border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow); font-family:"Gothic A1",sans-serif; }
+  .sel-toolbar.show{ display:flex; }
+  .sel-toolbar .st-label{ font-size:0.7rem; font-weight:800; color:var(--muted); padding:0 4px 0 6px; }
+  .sel-toolbar button{ min-width:30px; height:30px; padding:0 8px; border-radius:8px; border:1px solid var(--line); background:transparent;
+    color:var(--ink); font-size:0.82rem; font-weight:700; cursor:pointer; }
+  .sel-toolbar button:hover{ border-color:var(--accent); color:var(--accent); }
+  .sel-toolbar .st-sep{ width:1px; height:20px; background:var(--line); margin:0 4px; }
   .edit-marquee{ position:fixed; z-index:1200; pointer-events:none; border:1.5px dashed var(--accent);
     background:color-mix(in srgb, var(--accent) 14%, transparent); border-radius:4px; }
 
@@ -2076,16 +2086,6 @@
     }
 
     /* ---------- leaf text-edit ---------- */
-    function isLeafTextEl(el){
-      if(!el || el.nodeType !== 1) return false;
-      if(el.children.length > 0) return false;
-      if(!el.textContent || !el.textContent.trim()) return false;
-      var tag = el.tagName.toLowerCase();
-      if(['script','style','svg','img','input','br','hr','button'].indexOf(tag) !== -1) return false;
-      if(el.closest('.edit-toast, .edit-toolbar, .nav-editor-overlay')) return false;
-      return true;
-    }
-
     var activeEl = null, originalHtml = '';
 
     /* caret at the clicked spot (falls back to the end of the text) */
@@ -2143,10 +2143,44 @@
     }
 
     /* event delegation: works for every current AND future (cloned/added) element automatically */
+    /* any text can be edited: a block whose children are only text formatting (em, br, span…) is edited whole,
+       and a bare piece of text next to a picture (e.g. the logo name) is wrapped in a span first */
+    var INLINE_TAGS = ['span', 'b', 'strong', 'em', 'i', 'u', 's', 'small', 'mark', 'sub', 'sup', 'br', 'a', 'code', 'abbr', 'time', 'q', 'cite'];
+    function isTextBlock(el){
+      if(!el || el.nodeType !== 1 || el === pageRoot || !pageRoot.contains(el)) return false;
+      var tag = el.tagName.toLowerCase();
+      if(['script', 'style', 'svg', 'img', 'input', 'br', 'hr', 'select', 'textarea', 'iframe', 'video'].indexOf(tag) !== -1) return false;
+      if(el.closest('.edit-toast, .edit-toolbar, .nav-editor-overlay, .edit-del-btn, .edit-add-btn, .edit-spacer')) return false;
+      if(!el.textContent || !el.textContent.trim()) return false;
+      var kids = el.querySelectorAll('*');
+      for(var i = 0; i < kids.length; i++){
+        if(INLINE_TAGS.indexOf(kids[i].tagName.toLowerCase()) === -1) return false;
+      }
+      return true;
+    }
+    function editableTextFor(target, x, y){
+      var el = target && target.nodeType === 1 ? target : target && target.parentElement;
+      var best = null;
+      while(el && el !== pageRoot && isTextBlock(el)){
+        best = el;
+        if(window.getComputedStyle(el).display !== 'inline') break;
+        el = el.parentElement;
+      }
+      if(best) return best;
+      /* text sitting next to a picture or box: wrap just the clicked text */
+      var r = caretRangeAt(pageRoot, x, y);
+      var node = r && r.startContainer;
+      if(node && node.nodeType === 3 && node.nodeValue.trim() && pageRoot.contains(node) && !isEditorUi(node.parentElement)){
+        var span = document.createElement('span');
+        node.parentNode.insertBefore(span, node);
+        span.appendChild(node);
+        return span;
+      }
+      return null;
+    }
     pageRoot.addEventListener('dblclick', function(e){
-      var el = e.target.closest('*');
-      while(el && el !== pageRoot && !isLeafTextEl(el)){ el = el.parentElement; }
-      if(!el || el === pageRoot || !isLeafTextEl(el)) return;
+      var el = editableTextFor(e.target, e.clientX, e.clientY);
+      if(!el) return;
       e.preventDefault();
       startEdit(el, e.clientX, e.clientY);
     });
@@ -2301,6 +2335,11 @@
         '<button type="button" id="etSizeDown">A-</button>' +
         '<span class="et-size-label" id="etSizeLabel"></span>' +
         '<button type="button" id="etSizeUp">A+</button>' +
+      '</div>' +
+      '<div class="et-group et-align">' +
+        '<button type="button" data-align="left" title="왼쪽 정렬">⬅</button>' +
+        '<button type="button" data-align="center" title="가운데 정렬">⬌</button>' +
+        '<button type="button" data-align="right" title="오른쪽 정렬">➡</button>' +
       '</div>' +
       '<div class="et-group">' +
         '<button type="button" id="etBreak">줄바꿈</button>' +
@@ -2464,6 +2503,9 @@
       activeEl.focus();
     }
     document.getElementById('etBreak').addEventListener('click', insertLineBreak);
+    toolbar.querySelectorAll('.et-align button').forEach(function(btn){
+      btn.addEventListener('click', function(){ if(activeEl){ setTextAlign(activeEl, btn.getAttribute('data-align')); activeEl.focus(); } });
+    });
     document.getElementById('etResetEl').addEventListener('click', function(){
       if(!activeEl) return;
       activeEl.style.color = '';
@@ -2480,7 +2522,7 @@
     editToast.className = 'edit-toast';
     editToast.innerHTML =
       '<span class="edit-toast-title">✎ 편집 모드</span>' +
-      '<div class="edit-help" id="editHelp"><ul><li>더블클릭: 글자 수정 (Enter 줄바꿈 · Ctrl+Enter/바깥 클릭 완료)</li><li>사진 클릭: 교체</li><li>버튼/링크 클릭: 이동 주소 설정</li><li>드래그: 위치 이동 (Shift+드래그: 박스째)</li><li>빈 곳 드래그/Ctrl+클릭: 여러 개 선택 (Ctrl+드래그: 추가 · Alt+드래그: 빼기)</li><li>방향키: 1px 이동 (Shift 10px)</li><li>빈 곳 클릭 후 Enter: 빈 줄 넣어 아래로 밀기 (Backspace: 줄이기)</li><li>선택 후 모서리 손잡이: 크기 (Shift: 비율 자유)</li><li>Ctrl+G 묶기</li><li>Ctrl+Z/Y 되돌리기/다시</li><li>Ctrl+C/X/V 복사/잘라내기/붙여넣기</li><li>Delete 삭제</li><li>📱 모바일 편집: 휴대폰 화면의 위치·크기·빈 줄을 PC와 따로 편집</li></ul></div>' +
+      '<div class="edit-help" id="editHelp"><ul><li>더블클릭: 글자 수정 (Enter 줄바꿈 · Ctrl+Enter/바깥 클릭 완료)</li><li>사진 클릭: 교체</li><li>버튼/링크 클릭: 이동 주소 설정</li><li>드래그: 위치 이동 (Shift+드래그: 박스째)</li><li>빈 곳 드래그/Ctrl+클릭: 여러 개 선택 (Ctrl+드래그: 추가 · Alt+드래그: 빼기)</li><li>방향키: 1px 이동 (Shift 10px)</li><li>빈 곳 클릭 후 Enter: 빈 줄 넣어 아래로 밀기 (Backspace: 줄이기)</li><li>선택 후 모서리 손잡이: 크기 (Shift: 비율 자유)</li><li>Ctrl+G 묶기</li><li>Ctrl+Z/Y 되돌리기/다시</li><li>Ctrl+C/X/V 복사/잘라내기/붙여넣기</li><li>Delete 삭제</li><li>선택하면 위에 뜨는 도구줄: 정렬(⬅ ⬌ ➡) · 순서(맨 앞/앞으로/뒤로/맨 뒤)</li><li>순서 단축키: Ctrl+] 앞으로 · Ctrl+[ 뒤로 · Ctrl+Shift+] 맨 앞 · Ctrl+Shift+[ 맨 뒤</li><li>모든 글 더블클릭 수정 (제목·칩·표·로고 글자 포함)</li><li>📱 모바일 편집: 휴대폰 화면의 위치·크기·빈 줄을 PC와 따로 편집</li></ul></div>' +
       '<button type="button" id="editToastHelp">사용법 보기</button>' +
       '<button type="button" id="editToastNav">메뉴 관리</button>' +
       '<button type="button" id="editToastExport">페이지 저장(HTML)</button>' +
@@ -2806,6 +2848,7 @@
       el.setAttribute('data-moved', '1');
     }
     function updateHandle(){
+      if(typeof updateSelBar === 'function') updateSelBar();
       var anchor = selection[selection.length - 1];
       if(!anchor || !pageRoot.contains(anchor)){ handle.classList.remove('show'); return; }
       var r = anchor.getBoundingClientRect();
@@ -3184,6 +3227,153 @@
       return { fx: fx, fy: fy };
     }
 
+    /* ---------- selection toolbar: align left/center/right and stacking order (front/back) ---------- */
+    var selBar = document.createElement('div');
+    selBar.className = 'sel-toolbar';
+    selBar.innerHTML =
+      '<span class="st-label">정렬</span>' +
+      '<button type="button" data-align="left" title="왼쪽 정렬">⬅</button>' +
+      '<button type="button" data-align="center" title="가운데 정렬">⬌</button>' +
+      '<button type="button" data-align="right" title="오른쪽 정렬">➡</button>' +
+      '<span class="st-sep"></span><span class="st-label">순서</span>' +
+      '<button type="button" data-z="front" title="맨 앞으로 (Ctrl+Shift+])">⇈ 맨 앞</button>' +
+      '<button type="button" data-z="forward" title="앞으로 (Ctrl+])">↑</button>' +
+      '<button type="button" data-z="backward" title="뒤로 (Ctrl+[)">↓</button>' +
+      '<button type="button" data-z="back" title="맨 뒤로 (Ctrl+Shift+[)">⇊ 맨 뒤</button>' +
+      '<span class="st-sep"></span>' +
+      '<button type="button" data-act="group" title="묶기 (Ctrl+G)">묶기</button>';
+    document.body.appendChild(selBar);
+    selBar.addEventListener('mousedown', function(e){ e.preventDefault(); });
+    selBar.addEventListener('click', function(e){
+      var b = e.target.closest('button');
+      if(!b) return;
+      if(b.hasAttribute('data-align')) alignSelection(b.getAttribute('data-align'));
+      else if(b.hasAttribute('data-z')) zOrder(b.getAttribute('data-z'));
+      else if(b.getAttribute('data-act') === 'group') groupSelection();
+    });
+    function updateSelBar(){
+      if(!selBar) return;
+      if(!selection.length || resize){ selBar.classList.remove('show'); return; }
+      var u = unionRect(selection);
+      if(!u){ selBar.classList.remove('show'); return; }
+      selBar.classList.add('show');
+      var bw = selBar.offsetWidth, bh = selBar.offsetHeight;
+      var top = u.top - bh - 12;
+      if(top < 8) top = Math.min(window.innerHeight - bh - 8, u.bottom + 26);
+      selBar.style.top = top + 'px';
+      selBar.style.left = Math.min(Math.max(8, u.left), window.innerWidth - bw - 8) + 'px';
+    }
+
+    function setTextAlign(el, dir){
+      if(isMobileView()){ el.style.setProperty('--m-ta', dir); el.setAttribute('data-m-align', '1'); }
+      else { el.style.textAlign = dir; }
+    }
+    function setJustify(el, dir){
+      var v = dir === 'left' ? 'flex-start' : (dir === 'right' ? 'flex-end' : 'center');
+      if(isMobileView()){ el.style.setProperty('--m-jc', v); el.setAttribute('data-m-jalign', '1'); }
+      else { el.style.justifyContent = v; }
+    }
+    function contentBox(el){
+      var c = el.closest('.wrap') || el.parentElement || pageRoot;
+      if(c === el) c = el.parentElement;
+      var r = c.getBoundingClientRect(), cs = window.getComputedStyle(c);
+      var l = r.left + (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.borderLeftWidth) || 0);
+      var rt = r.right - (parseFloat(cs.paddingRight) || 0) - (parseFloat(cs.borderRightWidth) || 0);
+      return { left: l, right: rt, width: rt - l };
+    }
+    function shiftX(el, dx){
+      if(Math.abs(dx) < 0.5) return;
+      liftInline(el);
+      var t = parseTranslate(el);
+      setTranslate(el, t.x + dx, t.y);
+      markMoved(el);
+    }
+    function alignSelection(dir){
+      if(activeEl){ setTextAlign(activeEl, dir); saveSnapshot(); return; }
+      if(!selection.length){ flashToast('정렬할 것을 먼저 선택해 주세요'); return; }
+      if(selection.length === 1){
+        var el = selection[0];
+        var r = el.getBoundingClientRect(), box = contentBox(el), cs = window.getComputedStyle(el);
+        var wide = r.width >= box.width * 0.9;
+        var rowFlex = /flex/.test(cs.display) && cs.flexDirection.indexOf('row') === 0;
+        var textBlock = !rowFlex && cs.display !== 'inline' && isTextBlock(el);
+        if(rowFlex && wide){ setJustify(el, dir); }
+        else {
+          if(textBlock) setTextAlign(el, dir);   /* the lines inside follow the alignment too */
+          if(!wide){
+            var target = dir === 'left' ? box.left : (dir === 'right' ? box.right - r.width : box.left + (box.width - r.width) / 2);
+            shiftX(el, target - r.left);
+          } else if(!textBlock){ setTextAlign(el, dir); }
+        }
+      } else {
+        var u = unionRect(selection);
+        selection.forEach(function(el){
+          var r = el.getBoundingClientRect();
+          var target = dir === 'left' ? u.left : (dir === 'right' ? u.right - r.width : u.left + (u.width - r.width) / 2);
+          shiftX(el, target - r.left);
+        });
+      }
+      updateHandle();
+      saveSnapshot();
+      showSavedToast();
+    }
+
+    /* PowerPoint-style stacking: take everything that overlaps the selection, put the group in its current
+       painting order, move the selection within it, then number the whole group so the order is explicit */
+    function zOf(el){
+      var z = parseInt(el.style.zIndex, 10);
+      if(isNaN(z)) z = parseInt(window.getComputedStyle(el).zIndex, 10);
+      return isNaN(z) ? 0 : z;
+    }
+    function overlapPeers(){
+      var sel = selection.slice();
+      var u = unionRect(sel);
+      if(!u) return [];
+      var cands = pageRoot.querySelectorAll(DRAG_TARGETS + ', [data-moved], [data-m-moved], [data-group], .fork, .store, .card, [class*="card"]');
+      var out = [];
+      Array.prototype.forEach.call(cands, function(el){
+        if(isEditorUi(el) || sel.indexOf(el) !== -1) return;
+        if(sel.some(function(s){ return s.contains(el) || el.contains(s); })) return;
+        if(out.some(function(o){ return o.contains(el); })) return;
+        var b = el.getBoundingClientRect();
+        if(!b.width || !b.height) return;
+        if(b.right <= u.left || b.left >= u.right || b.bottom <= u.top || b.top >= u.bottom) return;
+        out = out.filter(function(o){ return !el.contains(o); });
+        out.push(el);
+      });
+      return out;
+    }
+    function zOrder(mode){
+      if(!selection.length){ flashToast('순서를 바꿀 것을 먼저 선택해 주세요'); return; }
+      var sel = topLevel(selection);
+      var all = overlapPeers().concat(sel);
+      var docPos = function(a, b){ return a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1; };
+      all.sort(function(a, b){ return (zOf(a) - zOf(b)) || docPos(a, b); });   /* bottom → top */
+      var rest = all.filter(function(el){ return sel.indexOf(el) === -1; });
+      var order;
+      if(mode === 'front') order = rest.concat(sel);
+      else if(mode === 'back') order = sel.concat(rest);
+      else {
+        /* one step: hop over the nearest peer above (forward) or below (backward) */
+        var idx = sel.map(function(el){ return all.indexOf(el); });
+        if(mode === 'forward'){
+          var hi = Math.max.apply(null, idx), above = all.slice(hi + 1).filter(function(el){ return sel.indexOf(el) === -1; })[0];
+          order = above ? rest.slice(0, rest.indexOf(above) + 1).concat(sel, rest.slice(rest.indexOf(above) + 1)) : rest.concat(sel);
+        } else {
+          var lo = Math.min.apply(null, idx), below = all.slice(0, lo).filter(function(el){ return sel.indexOf(el) === -1; }).pop();
+          order = below ? rest.slice(0, rest.indexOf(below)).concat(sel, rest.slice(rest.indexOf(below))) : sel.concat(rest);
+        }
+      }
+      var base = 2;
+      order.forEach(function(el, i){
+        if(window.getComputedStyle(el).position === 'static') el.style.position = 'relative';
+        el.style.zIndex = String(base + i);
+      });
+      updateHandle();
+      saveSnapshot();
+      flashToast(mode === 'front' ? '맨 앞으로' : mode === 'forward' ? '앞으로' : mode === 'backward' ? '뒤로' : '맨 뒤로');
+    }
+
     /* ---------- click a spot, then Enter adds blank space there and pushes what's below down ---------- */
     var SPACER_LINE = 28;
     var insertPoint = null;   /* { parent, above, below } between two blocks in normal page flow */
@@ -3431,6 +3621,12 @@
       var k = (e.key || '').toLowerCase();
       if(mod && k === 'z' && !e.shiftKey){ e.preventDefault(); undo(); return; }
       if(mod && (k === 'y' || (k === 'z' && e.shiftKey))){ e.preventDefault(); redo(); return; }
+      if(mod && (e.code === 'BracketRight' || e.code === 'BracketLeft') && selection.length){
+        e.preventDefault();
+        var fwd = e.code === 'BracketRight';
+        zOrder(e.shiftKey ? (fwd ? 'front' : 'back') : (fwd ? 'forward' : 'backward'));
+        return;
+      }
       if(mod && k === 'g'){ e.preventDefault(); if(e.shiftKey) ungroupSelection(); else groupSelection(); return; }
       if(mod && k === 'c' && selection.length){ e.preventDefault(); copySelection(); flashToast(selection.length + '개 복사했어요'); return; }
       if(mod && k === 'x' && selection.length){ e.preventDefault(); copySelection(); removeSelection(); return; }
