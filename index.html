@@ -2380,7 +2380,7 @@
     var editToast = document.createElement('div');
     editToast.className = 'edit-toast';
     editToast.innerHTML =
-      '<span>✎ 더블클릭: 글자 수정 (Enter 줄바꿈 · Ctrl+Enter/바깥 클릭 완료) · 사진 클릭: 교체 · 버튼/링크 클릭: 이동 주소 설정 · 드래그: 위치 이동 (Shift+드래그: 박스째) · 빈 곳 드래그/Ctrl+클릭: 여러 개 선택 · 선택 후 모서리 손잡이: 크기 (Shift: 비율 자유) · Ctrl+G 묶기 · Ctrl+Z/Y 되돌리기/다시 · Ctrl+C/X/V 복사/잘라내기/붙여넣기 · Delete 삭제</span>' +
+      '<span>✎ 더블클릭: 글자 수정 (Enter 줄바꿈 · Ctrl+Enter/바깥 클릭 완료) · 사진 클릭: 교체 · 버튼/링크 클릭: 이동 주소 설정 · 드래그: 위치 이동 (Shift+드래그: 박스째) · 빈 곳 드래그/Ctrl+클릭: 여러 개 선택 (Ctrl+드래그: 추가 · Alt+드래그: 빼기) · 방향키: 1px 이동 (Shift 10px) · 선택 후 모서리 손잡이: 크기 (Shift: 비율 자유) · Ctrl+G 묶기 · Ctrl+Z/Y 되돌리기/다시 · Ctrl+C/X/V 복사/잘라내기/붙여넣기 · Delete 삭제</span>' +
       '<button type="button" id="editToastNav">메뉴 관리</button>' +
       '<button type="button" id="editToastExport">페이지 저장(HTML)</button>' +
       '<button type="button" id="editToastGroup">묶기</button>' +
@@ -2641,8 +2641,9 @@
       handle.style.top = r.bottom + 'px';
       handle.classList.add('show');
       var sc = parseScale(anchor);
-      handleLabel.textContent = Math.round(sc.x * 100) + (Math.abs(sc.x - sc.y) > 0.005 ? '×' + Math.round(sc.y * 100) : '') + '%';
-      handleLabel.style.display = (resize || anchor.hasAttribute('data-scaled')) ? '' : 'none';
+      handleLabel.textContent = (selection.length > 1 ? selection.length + '개 · ' : '') +
+        Math.round(sc.x * 100) + (Math.abs(sc.x - sc.y) > 0.005 ? '×' + Math.round(sc.y * 100) : '') + '%';
+      handleLabel.style.display = (resize || selection.length > 1 || anchor.hasAttribute('data-scaled')) ? '' : 'none';
     }
     function liftInline(el){
       /* plain inline elements (span, b, a…) ignore translate/scale, so lift them to inline-block */
@@ -2715,6 +2716,9 @@
     window.addEventListener('scroll', function(){ if(selection.length) updateHandle(); }, true);
     window.addEventListener('resize', function(){ if(selection.length) updateHandle(); });
     function toggleSelect(el){
+      /* clicking inside something already selected (e.g. a word in a selected heading) unselects that thing */
+      var holder = selection.filter(function(s){ return s === el || s.contains(el); })[0];
+      if(holder) el = holder;
       var members = groupMembers(el);
       if(selection.indexOf(el) !== -1){
         setSelection(selection.filter(function(s){ return members.indexOf(s) === -1; }));
@@ -2751,12 +2755,14 @@
       if(e.button !== 0 || e.pointerType === 'touch') return;
       if(e.target.closest && e.target.closest('[contenteditable]')) return;
       var el = dragTargetFor(e);
-      if(!el){
-        if(isEditorUi(e.target) || e.ctrlKey || e.metaKey) return;
-        marquee = { sx: e.clientX, sy: e.clientY, box: null, active: false };
+      /* Ctrl/Cmd+drag adds the boxed items to the selection, Alt+drag takes them out;
+         a Ctrl/Cmd+click without moving toggles one item (handled on click) */
+      var mode = (e.ctrlKey || e.metaKey) ? 'add' : (e.altKey ? 'remove' : 'replace');
+      if(isEditorUi(e.target)) return;
+      if(!el || mode !== 'replace'){
+        marquee = { sx: e.clientX, sy: e.clientY, box: null, active: false, mode: mode };
         return;
       }
-      if(e.ctrlKey || e.metaKey) return;   /* Ctrl/Cmd+click toggles selection instead */
       var items = moveSetFor(el).map(function(it){
         var st = parseTranslate(it);
         return { el: it, ox: st.x, oy: st.y, oldTranslate: it.style.translate };
@@ -2823,7 +2829,17 @@
         if(!b.width || !b.height) return false;
         return b.left >= r.l && b.right <= r.r && b.top >= r.t && b.bottom <= r.b;
       });
-      setSelection(topLevel(hits));
+      hits = topLevel(hits);
+      if(m.mode === 'add'){
+        setSelection(selection.concat(hits));
+      } else if(m.mode === 'remove'){
+        var drop = withGroups(hits);
+        setSelection(selection.filter(function(s){
+          return !drop.some(function(d){ return d === s || d.contains(s) || s.contains(d); });
+        }));
+      } else {
+        setSelection(hits);
+      }
     }
     function endDrag(cancel){
       if(marquee){ endMarquee(cancel); return; }
@@ -2869,6 +2885,20 @@
       if(el && !el.closest('a') && !el.closest('img') && el.tagName !== 'IMG' && !isEditorUi(e.target)) setSelection([el]);
     }, true);
     pageRoot.addEventListener('dragstart', function(e){ e.preventDefault(); });
+
+    function nudgeSelection(dx, dy){
+      if(activeEl) finishEdit(activeEl);
+      selection.forEach(function(el){
+        liftInline(el);
+        var t = parseTranslate(el);
+        el.style.translate = Math.round(t.x + dx) + 'px ' + Math.round(t.y + dy) + 'px';
+        if(window.getComputedStyle(el).position === 'static') el.style.position = 'relative';
+        el.style.zIndex = el.style.zIndex || '3';
+        el.setAttribute('data-moved', '1');
+      });
+      updateHandle();
+      saveSnapshot();   /* debounced, so holding an arrow key becomes one undo step */
+    }
 
     /* ---------- grouping ---------- */
     function nextGroupId(){
@@ -3016,6 +3046,14 @@
       if(mod && k === 'x' && selection.length){ e.preventDefault(); copySelection(); removeSelection(); return; }
       if(mod && k === 'v' && clip){ e.preventDefault(); pasteClip(); return; }
       if((e.key === 'Delete' || e.key === 'Backspace') && selection.length){ e.preventDefault(); removeSelection(); return; }
+      /* arrow keys nudge the selection: 1px, or 10px with Shift */
+      var arrows = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+      if(arrows[e.key] && selection.length && !mod && !e.altKey){
+        e.preventDefault();
+        var step = e.shiftKey ? 10 : 1;
+        nudgeSelection(arrows[e.key][0] * step, arrows[e.key][1] * step);
+        return;
+      }
     });
 
     document.getElementById('editToastMoveReset').addEventListener('click', function(){
