@@ -1,11 +1,16 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "dorooni",
+  "main": "worker/index.js",
   "compatibility_date": "2026-10-01",
   "assets": {
     "directory": "./",
+    "binding": "ASSETS",
     "html_handling": "auto-trailing-slash",
-    "not_found_handling": "404-page"
+    "not_found_handling": "404-page",
+    "run_worker_first": ["/api/*"]
   },
+  // 가계부 동기화 저장소. id를 비워두면 배포할 때 wrangler가 KV를 자동으로 만든다.
+  "kv_namespaces": [{ "binding": "SYNC" }],
   "previews": {}
 }
