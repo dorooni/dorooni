@@ -816,12 +816,33 @@
     font:700 11px/1 "Gothic A1",sans-serif; color:#000; background:var(--accent); border-radius:5px; padding:3px 6px; }
   .edit-guide-v::after{ top:8px; left:4px; }
   .edit-guide-h::after{ left:8px; top:4px; }
-  /* phones keep the automatic layout: free moves, resizes and blank lines from the PC editor only apply on wider screens */
+  /* each screen keeps its own layout tweaks: PC moves/resizes/blank lines only apply on wide screens,
+     and the ones made in the mobile editor (data-m-*, --m-* variables, data-device="m") only on phones */
+  @media (min-width:721px){
+    .page .edit-spacer[data-device="m"]{ display:none !important; }
+  }
   @media (max-width:720px){
     .page [data-moved]{ translate:none !important; }
     .page [data-scaled]{ scale:none !important; }
-    .page .edit-spacer{ display:none !important; }
+    .page .edit-spacer:not([data-device="m"]){ display:none !important; }
+    .page [data-m-moved]{ translate:var(--m-tx, 0px) var(--m-ty, 0px) !important; position:relative; z-index:3; }
+    .page [data-m-scaled]{ scale:var(--m-sx, 1) var(--m-sy, 1) !important; transform-origin:0 0 !important; }
+    body.edit-mode .page [data-moved]:not([data-m-moved]){ outline:none; }
+    body.edit-mode .page [data-m-moved]{ outline:1px dotted color-mix(in srgb, var(--accent) 60%, transparent); outline-offset:2px; }
   }
+  /* PC editor: phone-size preview where the mobile layout is edited */
+  .m-editor{ position:fixed; inset:0; z-index:2000; background:rgba(0,0,0,0.94); display:none; flex-direction:column; align-items:center; padding:14px; gap:10px; }
+  .m-editor.show{ display:flex; }
+  .m-editor-bar{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:center; color:var(--ink); font-size:0.9rem; }
+  .m-editor-bar b{ color:var(--accent); }
+  .m-editor-bar button, .m-editor-bar select{ background:#000; color:var(--ink); border:1px solid var(--line); border-radius:999px; padding:8px 14px;
+    font-family:"Gothic A1",sans-serif; font-weight:700; font-size:0.84rem; cursor:pointer; }
+  .m-editor-bar .m-editor-close{ background:var(--accent); color:var(--accent-ink); border-color:var(--accent); }
+  .m-editor-stage{ flex:1; min-height:0; width:100%; display:flex; justify-content:center; align-items:flex-start; overflow:hidden; }
+  .m-editor-phone{ transform-origin:top center; border:10px solid #1b1b1b; border-radius:34px; box-shadow:0 0 0 2px #333, 0 30px 80px rgba(0,0,0,0.7); overflow:hidden; background:#000; }
+  .m-editor-phone iframe{ display:block; border:0; background:var(--paper); }
+  body.in-m-editor .edit-toast #editToastNav, body.in-m-editor .edit-toast #editToastExport,
+  body.in-m-editor .edit-toast #editToastClose, body.in-m-editor .edit-toast #editToastMobile{ display:none; }
   .et-group{ display:flex; align-items:center; gap:6px; padding-right:10px; border-right:1px solid var(--line); }
   .et-group:last-child{ border-right:none; padding-right:0; }
   .et-swatch{
@@ -2459,10 +2480,11 @@
     editToast.className = 'edit-toast';
     editToast.innerHTML =
       '<span class="edit-toast-title">✎ 편집 모드</span>' +
-      '<div class="edit-help" id="editHelp"><ul><li>더블클릭: 글자 수정 (Enter 줄바꿈 · Ctrl+Enter/바깥 클릭 완료)</li><li>사진 클릭: 교체</li><li>버튼/링크 클릭: 이동 주소 설정</li><li>드래그: 위치 이동 (Shift+드래그: 박스째)</li><li>빈 곳 드래그/Ctrl+클릭: 여러 개 선택 (Ctrl+드래그: 추가 · Alt+드래그: 빼기)</li><li>방향키: 1px 이동 (Shift 10px)</li><li>빈 곳 클릭 후 Enter: 빈 줄 넣어 아래로 밀기 (Backspace: 줄이기)</li><li>선택 후 모서리 손잡이: 크기 (Shift: 비율 자유)</li><li>Ctrl+G 묶기</li><li>Ctrl+Z/Y 되돌리기/다시</li><li>Ctrl+C/X/V 복사/잘라내기/붙여넣기</li><li>Delete 삭제</li></ul></div>' +
+      '<div class="edit-help" id="editHelp"><ul><li>더블클릭: 글자 수정 (Enter 줄바꿈 · Ctrl+Enter/바깥 클릭 완료)</li><li>사진 클릭: 교체</li><li>버튼/링크 클릭: 이동 주소 설정</li><li>드래그: 위치 이동 (Shift+드래그: 박스째)</li><li>빈 곳 드래그/Ctrl+클릭: 여러 개 선택 (Ctrl+드래그: 추가 · Alt+드래그: 빼기)</li><li>방향키: 1px 이동 (Shift 10px)</li><li>빈 곳 클릭 후 Enter: 빈 줄 넣어 아래로 밀기 (Backspace: 줄이기)</li><li>선택 후 모서리 손잡이: 크기 (Shift: 비율 자유)</li><li>Ctrl+G 묶기</li><li>Ctrl+Z/Y 되돌리기/다시</li><li>Ctrl+C/X/V 복사/잘라내기/붙여넣기</li><li>Delete 삭제</li><li>📱 모바일 편집: 휴대폰 화면의 위치·크기·빈 줄을 PC와 따로 편집</li></ul></div>' +
       '<button type="button" id="editToastHelp">사용법 보기</button>' +
       '<button type="button" id="editToastNav">메뉴 관리</button>' +
       '<button type="button" id="editToastExport">페이지 저장(HTML)</button>' +
+      '<button type="button" id="editToastMobile">📱 모바일 편집</button>' +
       '<button type="button" id="editToastGroup">묶기</button>' +
       '<button type="button" id="editToastUngroup">묶기 해제</button>' +
       '<button type="button" id="editToastMoveReset">위치·크기 초기화</button>' +
@@ -2711,11 +2733,77 @@
     document.body.appendChild(handle);
     var handleLabel = handle.firstChild;
     var resize = null;
+    /* ---------- per-screen layout values: PC uses translate/scale, the mobile editor uses --m-* variables ---------- */
+    function isMobileView(){ return window.matchMedia('(max-width:720px)').matches; }
+    var MOVED = function(){ return isMobileView() ? 'data-m-moved' : 'data-moved'; };
+    var SCALED = function(){ return isMobileView() ? 'data-m-scaled' : 'data-scaled'; };
     function parseScale(el){
-      var parts = (el.style.scale || '').split(/\s+/);
-      var x = parseFloat(parts[0]); if(!(x > 0)) x = 1;
-      var y = parseFloat(parts[1]); if(!(y > 0)) y = x;
+      var x, y;
+      if(isMobileView()){
+        x = parseFloat(el.style.getPropertyValue('--m-sx')); y = parseFloat(el.style.getPropertyValue('--m-sy'));
+      } else {
+        var parts = (el.style.scale || '').split(/\s+/);
+        x = parseFloat(parts[0]); y = parseFloat(parts[1]);
+      }
+      if(!(x > 0)) x = 1;
+      if(!(y > 0)) y = x;
       return { x: x, y: y };
+    }
+    function setScale(el, x, y){
+      if(isMobileView()){
+        el.style.setProperty('--m-sx', x.toFixed(3)); el.style.setProperty('--m-sy', y.toFixed(3));
+        el.setAttribute('data-m-scaled', '1');
+      } else {
+        el.style.scale = Math.abs(x - y) < 0.005 ? x.toFixed(3) : x.toFixed(3) + ' ' + y.toFixed(3);
+      }
+    }
+    function scaleState(el){
+      return isMobileView()
+        ? { sx: el.style.getPropertyValue('--m-sx'), sy: el.style.getPropertyValue('--m-sy'), had: el.hasAttribute('data-m-scaled') }
+        : { scale: el.style.scale, origin: el.style.transformOrigin, had: el.hasAttribute('data-scaled') };
+    }
+    function restoreScale(el, st){
+      if(isMobileView()){
+        if(st.sx) el.style.setProperty('--m-sx', st.sx); else el.style.removeProperty('--m-sx');
+        if(st.sy) el.style.setProperty('--m-sy', st.sy); else el.style.removeProperty('--m-sy');
+        if(!st.had) el.removeAttribute('data-m-scaled');
+      } else {
+        el.style.scale = st.scale || ''; el.style.transformOrigin = st.origin || '';
+        if(!st.had) el.removeAttribute('data-scaled');
+      }
+    }
+    function clearScale(el){
+      if(isMobileView()){ el.style.removeProperty('--m-sx'); el.style.removeProperty('--m-sy'); el.removeAttribute('data-m-scaled'); }
+      else { el.style.scale = ''; el.style.transformOrigin = ''; el.removeAttribute('data-scaled'); }
+    }
+    function moveState(el){
+      return isMobileView()
+        ? { tx: el.style.getPropertyValue('--m-tx'), ty: el.style.getPropertyValue('--m-ty'), had: el.hasAttribute('data-m-moved') }
+        : { t: el.style.translate, had: el.hasAttribute('data-moved') };
+    }
+    function restoreMove(el, st){
+      if(isMobileView()){
+        if(st.tx) el.style.setProperty('--m-tx', st.tx); else el.style.removeProperty('--m-tx');
+        if(st.ty) el.style.setProperty('--m-ty', st.ty); else el.style.removeProperty('--m-ty');
+        if(!st.had) el.removeAttribute('data-m-moved');
+      } else {
+        el.style.translate = st.t || '';
+        if(!st.had) el.removeAttribute('data-moved');
+      }
+    }
+    function setTranslate(el, x, y){
+      if(isMobileView()){
+        el.style.setProperty('--m-tx', Math.round(x) + 'px'); el.style.setProperty('--m-ty', Math.round(y) + 'px');
+        el.setAttribute('data-m-moved', '1');
+      } else {
+        el.style.translate = Math.round(x) + 'px ' + Math.round(y) + 'px';
+      }
+    }
+    function markMoved(el){
+      if(isMobileView()){ el.setAttribute('data-m-moved', '1'); return; }
+      if(window.getComputedStyle(el).position === 'static') el.style.position = 'relative';
+      el.style.zIndex = el.style.zIndex || '3';
+      el.setAttribute('data-moved', '1');
     }
     function updateHandle(){
       var anchor = selection[selection.length - 1];
@@ -2727,7 +2815,7 @@
       var sc = parseScale(anchor);
       handleLabel.textContent = (selection.length > 1 ? selection.length + '개 · ' : '') +
         Math.round(sc.x * 100) + (Math.abs(sc.x - sc.y) > 0.005 ? '×' + Math.round(sc.y * 100) : '') + '%';
-      handleLabel.style.display = (resize || selection.length > 1 || anchor.hasAttribute('data-scaled')) ? '' : 'none';
+      handleLabel.style.display = (resize || selection.length > 1 || anchor.hasAttribute(SCALED())) ? '' : 'none';
     }
     function liftInline(el){
       /* plain inline elements (span, b, a…) ignore translate/scale, so lift them to inline-block */
@@ -2737,7 +2825,7 @@
       }
     }
     function dropInlineIfUnused(el){
-      if(!el.hasAttribute('data-moved') && !el.hasAttribute('data-scaled') && el.hasAttribute('data-moved-inline')){
+      if(!['data-moved', 'data-scaled', 'data-m-moved', 'data-m-scaled'].some(function(a){ return el.hasAttribute(a); }) && el.hasAttribute('data-moved-inline')){
         el.style.display = ''; el.removeAttribute('data-moved-inline');
       }
     }
@@ -2751,13 +2839,13 @@
         sx: e.clientX, sy: e.clientY, w: r.width || 1, h: r.height || 1,
         rect: { left: r.left, top: r.top, width: r.width || 1, height: r.height || 1 },
         items: selection.map(function(el){
-          return { el: el, start: parseScale(el), oldScale: el.style.scale, oldOrigin: el.style.transformOrigin };
+          return { el: el, start: parseScale(el), old: scaleState(el) };
         })
       };
       resize.items.forEach(function(it){
         liftInline(it.el);
         /* keep the top-left corner fixed so the handle follows the mouse */
-        if(it.el.style.transformOrigin !== '0px 0px'){ it.el.style.transformOrigin = '0 0'; }
+        if(!isMobileView() && it.el.style.transformOrigin !== '0px 0px'){ it.el.style.transformOrigin = '0 0'; }
       });
       document.body.classList.add('dragging');
     });
@@ -2771,7 +2859,7 @@
       fx = sn.fx; fy = sn.fy;
       resize.items.forEach(function(it){
         var x = clampScale(it.start.x * fx), y = clampScale(it.start.y * fy);
-        it.el.style.scale = Math.abs(x - y) < 0.005 ? x.toFixed(3) : x.toFixed(3) + ' ' + y.toFixed(3);
+        setScale(it.el, x, y);
       });
       updateHandle();
     }
@@ -2783,17 +2871,16 @@
       rz.items.forEach(function(it){
         var el = it.el;
         if(cancel){
-          el.style.scale = it.oldScale || '';
-          el.style.transformOrigin = it.oldOrigin || '';
+          restoreScale(el, it.old);
           dropInlineIfUnused(el);
           return;
         }
         var sc = parseScale(el);
         if(Math.abs(sc.x - 1) < 0.005 && Math.abs(sc.y - 1) < 0.005){
-          el.style.scale = ''; el.style.transformOrigin = ''; el.removeAttribute('data-scaled');
+          clearScale(el);
           dropInlineIfUnused(el);
         } else {
-          el.setAttribute('data-scaled', '1');
+          el.setAttribute(SCALED(), '1');
         }
         if(!el.getAttribute('style')) el.removeAttribute('style');
       });
@@ -2820,6 +2907,9 @@
     var drag = null, marquee = null, suppressClick = false;
 
     function parseTranslate(el){
+      if(isMobileView()){
+        return { x: parseFloat(el.style.getPropertyValue('--m-tx')) || 0, y: parseFloat(el.style.getPropertyValue('--m-ty')) || 0 };
+      }
       var parts = (el.style.translate || '').split(/\s+/);
       return { x: parseFloat(parts[0]) || 0, y: parseFloat(parts[1]) || 0 };
     }
@@ -2854,7 +2944,7 @@
       }
       var items = moveSetFor(el).map(function(it){
         var st = parseTranslate(it);
-        return { el: it, ox: st.x, oy: st.y, oldTranslate: it.style.translate };
+        return { el: it, ox: st.x, oy: st.y, old: moveState(it) };
       });
       drag = { items: items, sx: e.clientX, sy: e.clientY, active: false };
     });
@@ -2904,7 +2994,7 @@
         dx = snapped.dx; dy = snapped.dy;
       }
       drag.items.forEach(function(it){
-        it.el.style.translate = Math.round(it.ox + dx) + 'px ' + Math.round(it.oy + dy) + 'px';
+        setTranslate(it.el, it.ox + dx, it.oy + dy);
       });
       if(selection.length) updateHandle();
     });
@@ -2951,13 +3041,11 @@
         el.classList.remove('is-dragging');
         if(!el.getAttribute('class')) el.removeAttribute('class');
         if(cancel){
-          el.style.translate = it.oldTranslate || '';
+          restoreMove(el, it.old);
           dropInlineIfUnused(el);
           return;
         }
-        if(window.getComputedStyle(el).position === 'static') el.style.position = 'relative';
-        el.style.zIndex = el.style.zIndex || '3';
-        el.setAttribute('data-moved', '1');
+        markMoved(el);
       });
       if(cancel){ updateHandle(); return; }
       /* the moved item stays selected so its resize handle is right there */
@@ -3103,7 +3191,10 @@
     caretLine.className = 'edit-caret';
     document.body.appendChild(caretLine);
 
-    function isSpacer(n){ return !!(n && n.nodeType === 1 && n.classList.contains('edit-spacer')); }
+    /* only the blank lines of the screen being edited count (PC and mobile keep their own) */
+    function isSpacer(n){
+      return !!(n && n.nodeType === 1 && n.classList.contains('edit-spacer') && (n.getAttribute('data-device') === 'm') === isMobileView());
+    }
     function stacksVertically(parent){
       var cs = window.getComputedStyle(parent);
       if(cs.display === 'block' || cs.display === 'list-item' || cs.display === 'flow-root') return true;
@@ -3161,6 +3252,7 @@
       else {
         var sp = document.createElement('div');
         sp.className = 'edit-spacer';
+        if(isMobileView()) sp.setAttribute('data-device', 'm');
         sp.setAttribute('aria-hidden', 'true');
         sp.style.height = SPACER_LINE + 'px';
         ip.parent.insertBefore(sp, ip.below && ip.below.parentElement === ip.parent ? ip.below : null);
@@ -3190,10 +3282,8 @@
       selection.forEach(function(el){
         liftInline(el);
         var t = parseTranslate(el);
-        el.style.translate = Math.round(t.x + dx) + 'px ' + Math.round(t.y + dy) + 'px';
-        if(window.getComputedStyle(el).position === 'static') el.style.position = 'relative';
-        el.style.zIndex = el.style.zIndex || '3';
-        el.setAttribute('data-moved', '1');
+        setTranslate(el, t.x + dx, t.y + dy);
+        markMoved(el);
       });
       updateHandle();
       saveSnapshot();   /* debounced, so holding an arrow key becomes one undo step */
@@ -3360,17 +3450,25 @@
     });
 
     document.getElementById('editToastMoveReset').addEventListener('click', function(){
-      var moved = pageRoot.querySelectorAll('[data-moved], [data-scaled]');
-      if(!moved.length){ alert('옮기거나 크기를 바꾼 항목이 없어요.'); return; }
-      if(!confirm('옮기거나 크기를 바꾼 ' + moved.length + '개 항목을 원래 위치·크기로 되돌릴까요?')) return;
+      var mob = isMobileView();
+      var where = mob ? '모바일 화면' : 'PC 화면';
+      var moved = pageRoot.querySelectorAll(mob ? '[data-m-moved], [data-m-scaled]' : '[data-moved], [data-scaled]');
+      if(!moved.length){ alert(where + '에서 옮기거나 크기를 바꾼 항목이 없어요.'); return; }
+      if(!confirm(where + '에서 옮기거나 크기를 바꾼 ' + moved.length + '개 항목을 원래 위치·크기로 되돌릴까요?')) return;
       moved.forEach(function(el){
-        el.style.translate = '';
-        el.style.scale = '';
-        el.style.transformOrigin = '';
-        el.style.zIndex = '';
-        if(el.style.position === 'relative' && !el.classList.contains('edit-repeat-child')) el.style.position = '';
-        el.removeAttribute('data-moved');
-        el.removeAttribute('data-scaled');
+        if(mob){
+          ['--m-tx', '--m-ty', '--m-sx', '--m-sy'].forEach(function(v){ el.style.removeProperty(v); });
+          el.removeAttribute('data-m-moved');
+          el.removeAttribute('data-m-scaled');
+        } else {
+          el.style.translate = '';
+          el.style.scale = '';
+          el.style.transformOrigin = '';
+          el.style.zIndex = '';
+          if(el.style.position === 'relative' && !el.classList.contains('edit-repeat-child')) el.style.position = '';
+          el.removeAttribute('data-moved');
+          el.removeAttribute('data-scaled');
+        }
         dropInlineIfUnused(el);
         if(!el.getAttribute('style')) el.removeAttribute('style');
       });
@@ -3378,6 +3476,56 @@
       saveSnapshot();
       showSavedToast();
     });
+
+    /* ---------- mobile editor: the same page in a phone-size frame, where moves/sizes/blank lines are saved for phones only ---------- */
+    var inMobileFrame = false;
+    try{ inMobileFrame = window.self !== window.top && /[?&]m=1\b/.test(location.search); }catch(e){ inMobileFrame = true; }
+    window.__runiFlush = flushSave;
+    if(inMobileFrame){
+      document.body.classList.add('in-m-editor');
+      editToast.querySelector('.edit-toast-title').textContent = '📱 모바일 화면 편집 중';
+    } else {
+      var mEditor = document.createElement('div');
+      mEditor.className = 'm-editor';
+      mEditor.innerHTML =
+        '<div class="m-editor-bar">' +
+          '<span><b>📱 모바일 화면 편집</b> · 여기서 옮기기·크기·빈 줄은 휴대폰에만 적용돼요 (글자·사진·링크는 PC와 공통)</span>' +
+          '<select id="mEditorWidth" title="휴대폰 폭"><option value="360">360px</option><option value="390" selected>390px</option><option value="430">430px</option></select>' +
+          '<button type="button" class="m-editor-close" id="mEditorClose">PC로 돌아가기</button>' +
+        '</div>' +
+        '<div class="m-editor-stage"><div class="m-editor-phone" id="mEditorPhone"></div></div>';
+      document.body.appendChild(mEditor);
+      var phone = document.getElementById('mEditorPhone');
+      var frame = null;
+      function fitPhone(){
+        var w = parseInt(document.getElementById('mEditorWidth').value, 10) || 390, h = 844;
+        if(frame){ frame.style.width = w + 'px'; frame.style.height = h + 'px'; }
+        var stage = mEditor.querySelector('.m-editor-stage').getBoundingClientRect();
+        var k = Math.min(1, (stage.height - 8) / (h + 20), (stage.width - 8) / (w + 20));
+        phone.style.transform = 'scale(' + k + ')';
+      }
+      function openMobileEditor(){
+        if(activeEl) finishEdit(activeEl);
+        clearSelection(); clearInsertPoint();
+        flushSave();
+        var url = location.pathname + '?edit&m=1';
+        phone.innerHTML = '<iframe title="모바일 화면 편집" src="' + url + '"></iframe>';
+        frame = phone.firstChild;
+        mEditor.classList.add('show');
+        fitPhone();
+      }
+      function closeMobileEditor(){
+        try{ if(frame && frame.contentWindow && frame.contentWindow.__runiFlush) frame.contentWindow.__runiFlush(); }catch(e){}
+        mEditor.classList.remove('show');
+        phone.innerHTML = '';
+        frame = null;
+        location.reload();   /* bring the mobile edits (shared text, photos…) into the PC view */
+      }
+      document.getElementById('editToastMobile').addEventListener('click', openMobileEditor);
+      document.getElementById('mEditorClose').addEventListener('click', closeMobileEditor);
+      document.getElementById('mEditorWidth').addEventListener('change', fitPhone);
+      window.addEventListener('resize', function(){ if(mEditor.classList.contains('show')) fitPhone(); });
+    }
 
     /* ---------- export: download the edited page as index.html so every visitor sees it ---------- */
     function buildExportHtml(){
