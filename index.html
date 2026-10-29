@@ -2035,16 +2035,32 @@
 
     var activeEl = null, originalHtml = '';
 
-    function startEdit(el){
+    /* caret at the clicked spot (falls back to the end of the text) */
+    function caretRangeAt(el, x, y){
+      var r = null;
+      if(x != null){
+        if(document.caretRangeFromPoint){ r = document.caretRangeFromPoint(x, y); }
+        else if(document.caretPositionFromPoint){
+          var pos = document.caretPositionFromPoint(x, y);
+          if(pos){ r = document.createRange(); r.setStart(pos.offsetNode, pos.offset); r.collapse(true); }
+        }
+      }
+      if(!r || !el.contains(r.startContainer)){
+        r = document.createRange();
+        r.selectNodeContents(el);
+        r.collapse(false);
+      }
+      return r;
+    }
+
+    function startEdit(el, x, y){
       if(activeEl && activeEl !== el){ finishEdit(activeEl); }
       activeEl = el;
       originalHtml = el.innerHTML;
       el.setAttribute('contenteditable', 'true');
       el.classList.add('is-editing');
       el.focus();
-      var range = document.createRange();
-      range.selectNodeContents(el);
-      range.collapse(false);
+      var range = caretRangeAt(el, x, y);
       var sel = window.getSelection();
       sel.removeAllRanges();
       sel.addRange(range);
@@ -2054,6 +2070,11 @@
     }
 
     function finishEdit(el){
+      /* trailing <br>s only exist to show an empty last line while typing */
+      while(el.lastChild && (el.lastChild.nodeName === 'BR' || (el.lastChild.nodeType === 3 && !el.lastChild.nodeValue.trim()))){
+        if(el.lastChild.nodeName !== 'BR' && !el.lastChild.previousSibling) break;
+        el.removeChild(el.lastChild);
+      }
       el.removeAttribute('contenteditable');
       el.classList.remove('is-editing');
       if(el.innerHTML !== originalHtml){ saveSnapshot(); showSavedToast(); }
@@ -2073,7 +2094,7 @@
       while(el && el !== pageRoot && !isLeafTextEl(el)){ el = el.parentElement; }
       if(!el || el === pageRoot || !isLeafTextEl(el)) return;
       e.preventDefault();
-      startEdit(el);
+      startEdit(el, e.clientX, e.clientY);
     });
     pageRoot.addEventListener('focusout', function(e){
       var el = e.target;
@@ -2087,8 +2108,21 @@
     pageRoot.addEventListener('keydown', function(e){
       var el = e.target;
       if(!el || !el.hasAttribute || !el.hasAttribute('contenteditable')) return;
-      if(e.key === 'Enter'){ e.preventDefault(); el.blur(); }
+      /* Enter breaks the line where the caret is; Ctrl/Cmd+Enter finishes editing */
+      if(e.key === 'Enter' && !e.isComposing){
+        e.preventDefault();
+        if(e.ctrlKey || e.metaKey){ el.blur(); } else { insertLineBreak(); }
+      }
       if(e.key === 'Escape'){ e.preventDefault(); cancelEdit(el); el.blur(); }
+    });
+    /* Enter pressed while a Korean syllable is still being composed reaches here instead of keydown */
+    pageRoot.addEventListener('beforeinput', function(e){
+      var el = e.target;
+      if(!el || !el.isContentEditable) return;
+      if(e.inputType === 'insertParagraph' || e.inputType === 'insertLineBreak'){
+        e.preventDefault();
+        insertLineBreak();
+      }
     });
 
     /* ---------- image replace (click any photo/logo to swap it) ---------- */
@@ -2305,23 +2339,32 @@
       applyToSelectionOrElement(range, 'fontSize', px + 'px');
       updateSizeLabel(activeEl);
     });
-    document.getElementById('etBreak').addEventListener('click', function(){
+    function insertLineBreak(){
       if(!activeEl) return;
       var sel = window.getSelection();
+      var range;
       if(sel.rangeCount && activeEl.contains(sel.anchorNode)){
-        var range = sel.getRangeAt(0);
+        range = sel.getRangeAt(0);
         range.deleteContents();
-        var br = document.createElement('br');
-        range.insertNode(br);
-        range.setStartAfter(br);
-        range.setEndAfter(br);
-        sel.removeAllRanges();
-        sel.addRange(range);
       } else {
-        activeEl.appendChild(document.createElement('br'));
+        range = document.createRange();
+        range.selectNodeContents(activeEl);
+        range.collapse(false);
       }
+      var br = document.createElement('br');
+      range.insertNode(br);
+      /* at the very end a single <br> shows no new line, so add one more to hold the caret */
+      var next = br.nextSibling;
+      while(next && next.nodeType === 3 && !next.nodeValue.length){ next = next.nextSibling; }
+      if(!next){ br.parentNode.insertBefore(document.createElement('br'), br.nextSibling); }
+      range = document.createRange();
+      range.setStartAfter(br);
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
       activeEl.focus();
-    });
+    }
+    document.getElementById('etBreak').addEventListener('click', insertLineBreak);
     document.getElementById('etResetEl').addEventListener('click', function(){
       if(!activeEl) return;
       activeEl.style.color = '';
@@ -2337,7 +2380,7 @@
     var editToast = document.createElement('div');
     editToast.className = 'edit-toast';
     editToast.innerHTML =
-      '<span>✎ 더블클릭: 글자 수정 · 사진 클릭: 교체 · 버튼/링크 클릭: 이동 주소 설정 · 드래그: 위치 이동 (Shift+드래그: 박스째) · 빈 곳 드래그/Ctrl+클릭: 여러 개 선택 · 선택 후 모서리 손잡이: 크기 (Shift: 비율 자유) · Ctrl+G 묶기 · Ctrl+Z/Y 되돌리기/다시 · Ctrl+C/X/V 복사/잘라내기/붙여넣기 · Delete 삭제</span>' +
+      '<span>✎ 더블클릭: 글자 수정 (Enter 줄바꿈 · Ctrl+Enter/바깥 클릭 완료) · 사진 클릭: 교체 · 버튼/링크 클릭: 이동 주소 설정 · 드래그: 위치 이동 (Shift+드래그: 박스째) · 빈 곳 드래그/Ctrl+클릭: 여러 개 선택 · 선택 후 모서리 손잡이: 크기 (Shift: 비율 자유) · Ctrl+G 묶기 · Ctrl+Z/Y 되돌리기/다시 · Ctrl+C/X/V 복사/잘라내기/붙여넣기 · Delete 삭제</span>' +
       '<button type="button" id="editToastNav">메뉴 관리</button>' +
       '<button type="button" id="editToastExport">페이지 저장(HTML)</button>' +
       '<button type="button" id="editToastGroup">묶기</button>' +
