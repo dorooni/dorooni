@@ -922,6 +922,11 @@
   body.dragging, body.dragging *{ user-select:none !important; -webkit-user-select:none !important; cursor:grabbing !important; }
   .is-selected{ outline:2px dashed var(--accent) !important; outline-offset:3px; background-color:color-mix(in srgb, var(--accent) 12%, transparent) !important; }
   body.edit-mode .page [data-group]:hover{ outline:1px dashed #3E7FC1; outline-offset:3px; }
+  .edit-resize-handle{ position:fixed; z-index:1250; width:16px; height:16px; margin:-8px 0 0 -8px; display:none;
+    background:var(--accent); border:2px solid #000; border-radius:4px; cursor:nwse-resize; box-shadow:0 2px 8px rgba(0,0,0,0.6); touch-action:none; }
+  .edit-resize-handle.show{ display:block; }
+  .edit-resize-label{ position:absolute; left:20px; top:-4px; white-space:nowrap; font:700 11px/1 "JetBrains Mono",monospace;
+    color:#000; background:var(--accent); border-radius:6px; padding:4px 6px; pointer-events:none; }
   .edit-marquee{ position:fixed; z-index:1200; pointer-events:none; border:1.5px dashed var(--accent);
     background:color-mix(in srgb, var(--accent) 14%, transparent); border-radius:4px; }
 
@@ -2332,12 +2337,12 @@
     var editToast = document.createElement('div');
     editToast.className = 'edit-toast';
     editToast.innerHTML =
-      '<span>✎ 더블클릭: 글자 수정 · 사진 클릭: 교체 · 버튼/링크 클릭: 이동 주소 설정 · 드래그: 위치 이동 (Shift+드래그: 박스째) · 빈 곳 드래그/Ctrl+클릭: 여러 개 선택 · Ctrl+G 묶기 · Ctrl+Z/Y 되돌리기/다시 · Ctrl+C/X/V 복사/잘라내기/붙여넣기 · Delete 삭제</span>' +
+      '<span>✎ 더블클릭: 글자 수정 · 사진 클릭: 교체 · 버튼/링크 클릭: 이동 주소 설정 · 드래그: 위치 이동 (Shift+드래그: 박스째) · 빈 곳 드래그/Ctrl+클릭: 여러 개 선택 · 선택 후 모서리 손잡이: 크기 (Shift: 비율 자유) · Ctrl+G 묶기 · Ctrl+Z/Y 되돌리기/다시 · Ctrl+C/X/V 복사/잘라내기/붙여넣기 · Delete 삭제</span>' +
       '<button type="button" id="editToastNav">메뉴 관리</button>' +
       '<button type="button" id="editToastExport">페이지 저장(HTML)</button>' +
       '<button type="button" id="editToastGroup">묶기</button>' +
       '<button type="button" id="editToastUngroup">묶기 해제</button>' +
-      '<button type="button" id="editToastMoveReset">위치 초기화</button>' +
+      '<button type="button" id="editToastMoveReset">위치·크기 초기화</button>' +
       '<button type="button" id="editToastReset">되돌리기</button>' +
       '<button type="button" id="editToastClose">편집 종료</button>';
     document.body.appendChild(editToast);
@@ -2567,8 +2572,105 @@
       selection.forEach(function(el){ el.classList.remove('is-selected'); if(!el.getAttribute('class')) el.removeAttribute('class'); });
       selection = withGroups(list.filter(function(el){ return el && pageRoot.contains(el); }));
       selection.forEach(function(el){ el.classList.add('is-selected'); });
+      updateHandle();
     }
     function clearSelection(){ setSelection([]); }
+
+    /* ---------- resize handle (bottom-right corner of the last selected item) ---------- */
+    var handle = document.createElement('div');
+    handle.className = 'edit-resize-handle';
+    handle.title = '드래그해서 크기 조절 (Shift: 가로·세로 따로)';
+    handle.innerHTML = '<span class="edit-resize-label"></span>';
+    document.body.appendChild(handle);
+    var handleLabel = handle.firstChild;
+    var resize = null;
+    function parseScale(el){
+      var parts = (el.style.scale || '').split(/\s+/);
+      var x = parseFloat(parts[0]); if(!(x > 0)) x = 1;
+      var y = parseFloat(parts[1]); if(!(y > 0)) y = x;
+      return { x: x, y: y };
+    }
+    function updateHandle(){
+      var anchor = selection[selection.length - 1];
+      if(!anchor || !pageRoot.contains(anchor)){ handle.classList.remove('show'); return; }
+      var r = anchor.getBoundingClientRect();
+      handle.style.left = r.right + 'px';
+      handle.style.top = r.bottom + 'px';
+      handle.classList.add('show');
+      var sc = parseScale(anchor);
+      handleLabel.textContent = Math.round(sc.x * 100) + (Math.abs(sc.x - sc.y) > 0.005 ? '×' + Math.round(sc.y * 100) : '') + '%';
+      handleLabel.style.display = (resize || anchor.hasAttribute('data-scaled')) ? '' : 'none';
+    }
+    function liftInline(el){
+      /* plain inline elements (span, b, a…) ignore translate/scale, so lift them to inline-block */
+      if(window.getComputedStyle(el).display === 'inline'){
+        el.style.display = 'inline-block';
+        el.setAttribute('data-moved-inline', '1');
+      }
+    }
+    function dropInlineIfUnused(el){
+      if(!el.hasAttribute('data-moved') && !el.hasAttribute('data-scaled') && el.hasAttribute('data-moved-inline')){
+        el.style.display = ''; el.removeAttribute('data-moved-inline');
+      }
+    }
+    handle.addEventListener('pointerdown', function(e){
+      if(e.button !== 0 || !selection.length) return;
+      e.preventDefault(); e.stopPropagation();
+      if(activeEl) finishEdit(activeEl);
+      var anchor = selection[selection.length - 1];
+      var r = anchor.getBoundingClientRect();
+      resize = {
+        sx: e.clientX, sy: e.clientY, w: r.width || 1, h: r.height || 1,
+        items: selection.map(function(el){
+          return { el: el, start: parseScale(el), oldScale: el.style.scale, oldOrigin: el.style.transformOrigin };
+        })
+      };
+      resize.items.forEach(function(it){
+        liftInline(it.el);
+        /* keep the top-left corner fixed so the handle follows the mouse */
+        if(it.el.style.transformOrigin !== '0px 0px'){ it.el.style.transformOrigin = '0 0'; }
+      });
+      document.body.classList.add('dragging');
+    });
+    function clampScale(v){ return Math.min(5, Math.max(0.3, v)); }
+    function moveResize(e){
+      var fx = (resize.w + e.clientX - resize.sx) / resize.w;
+      var fy = (resize.h + e.clientY - resize.sy) / resize.h;
+      if(!e.shiftKey){ fx = fy = (fx + fy) / 2; }
+      resize.items.forEach(function(it){
+        var x = clampScale(it.start.x * fx), y = clampScale(it.start.y * fy);
+        it.el.style.scale = Math.abs(x - y) < 0.005 ? x.toFixed(3) : x.toFixed(3) + ' ' + y.toFixed(3);
+      });
+      updateHandle();
+    }
+    function endResize(cancel){
+      var rz = resize; resize = null;
+      if(!rz) return;
+      document.body.classList.remove('dragging');
+      rz.items.forEach(function(it){
+        var el = it.el;
+        if(cancel){
+          el.style.scale = it.oldScale || '';
+          el.style.transformOrigin = it.oldOrigin || '';
+          dropInlineIfUnused(el);
+          return;
+        }
+        var sc = parseScale(el);
+        if(Math.abs(sc.x - 1) < 0.005 && Math.abs(sc.y - 1) < 0.005){
+          el.style.scale = ''; el.style.transformOrigin = ''; el.removeAttribute('data-scaled');
+          dropInlineIfUnused(el);
+        } else {
+          el.setAttribute('data-scaled', '1');
+        }
+        if(!el.getAttribute('style')) el.removeAttribute('style');
+      });
+      updateHandle();
+      if(cancel) return;
+      saveSnapshot();
+      showSavedToast();
+    }
+    window.addEventListener('scroll', function(){ if(selection.length) updateHandle(); }, true);
+    window.addEventListener('resize', function(){ if(selection.length) updateHandle(); });
     function toggleSelect(el){
       var members = groupMembers(el);
       if(selection.indexOf(el) !== -1){
@@ -2619,6 +2721,7 @@
       drag = { items: items, sx: e.clientX, sy: e.clientY, active: false };
     });
     document.addEventListener('pointermove', function(e){
+      if(resize){ e.preventDefault(); moveResize(e); return; }
       if(marquee){
         var mx = e.clientX - marquee.sx, my = e.clientY - marquee.sy;
         if(!marquee.active){
@@ -2647,11 +2750,7 @@
         clearTimeout(linkClickTimer);
         if(activeEl) finishEdit(activeEl);
         drag.items.forEach(function(it){
-          /* plain inline elements (span, b, a…) ignore translate, so lift them to inline-block */
-          if(window.getComputedStyle(it.el).display === 'inline'){
-            it.el.style.display = 'inline-block';
-            it.el.setAttribute('data-moved-inline', '1');
-          }
+          liftInline(it.el);
           it.el.classList.add('is-dragging');
         });
         document.body.classList.add('dragging');
@@ -2661,6 +2760,7 @@
       drag.items.forEach(function(it){
         it.el.style.translate = Math.round(it.ox + dx) + 'px ' + Math.round(it.oy + dy) + 'px';
       });
+      if(selection.length) updateHandle();
     });
     function swallowNextClick(){
       suppressClick = true;
@@ -2695,19 +2795,21 @@
         if(!el.getAttribute('class')) el.removeAttribute('class');
         if(cancel){
           el.style.translate = it.oldTranslate || '';
-          if(!el.hasAttribute('data-moved') && el.hasAttribute('data-moved-inline')){ el.style.display = ''; el.removeAttribute('data-moved-inline'); }
+          dropInlineIfUnused(el);
           return;
         }
         if(window.getComputedStyle(el).position === 'static') el.style.position = 'relative';
         el.style.zIndex = el.style.zIndex || '3';
         el.setAttribute('data-moved', '1');
       });
-      if(cancel) return;
+      if(cancel){ updateHandle(); return; }
+      /* the moved item stays selected so its resize handle is right there */
+      setSelection(d.items.map(function(it){ return it.el; }));
       saveSnapshot();
       showSavedToast();
     }
-    document.addEventListener('pointerup', function(){ endDrag(false); });
-    document.addEventListener('pointercancel', function(){ endDrag(true); });
+    document.addEventListener('pointerup', function(){ if(resize){ endResize(false); return; } endDrag(false); });
+    document.addEventListener('pointercancel', function(){ if(resize){ endResize(true); return; } endDrag(true); });
     /* swallow the click that ends a drag so it doesn't open the link editor or the photo picker;
        Ctrl/Cmd+click selects instead of opening anything; a plain click on empty space clears the selection */
     pageRoot.addEventListener('click', function(e){
@@ -2720,6 +2822,8 @@
         return;
       }
       if(!el && selection.length && !isEditorUi(e.target)) clearSelection();
+      /* text blocks (headings, paragraphs, chips…) are selected by a plain click; links and photos keep their own click actions */
+      if(el && !el.closest('a') && !el.closest('img') && el.tagName !== 'IMG' && !isEditorUi(e.target)) setSelection([el]);
     }, true);
     pageRoot.addEventListener('dragstart', function(e){ e.preventDefault(); });
 
@@ -2757,6 +2861,7 @@
       activeEl = null;
       toolbar.classList.remove('show');
       selection = [];
+      updateHandle();
       pageRoot.innerHTML = historyStates[i];
       rehydrate();
       try{ localStorage.setItem(SNAPSHOT_KEY, historyStates[i]); }catch(e){ showQuotaWarning(); }
@@ -2810,6 +2915,7 @@
         if(canRemove(el)){ el.remove(); removed++; } else { kept++; }
       });
       selection = [];
+      updateHandle();
       if(kept) alert('목록의 마지막 항목 ' + kept + '개는 남겨 두었어요. (최소 1개 필요)');
       if(removed){ saveSnapshot(); showSavedToast(); }
     }
@@ -2850,6 +2956,7 @@
       var t = e.target;
       var typing = t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
       if(e.key === 'Escape'){
+        if(resize){ endResize(true); return; }
         if(drag && drag.active){ endDrag(true); return; }
         if(marquee && marquee.active){ endMarquee(true); return; }
         if(!typing && selection.length){ clearSelection(); return; }
@@ -2869,17 +2976,21 @@
     });
 
     document.getElementById('editToastMoveReset').addEventListener('click', function(){
-      var moved = pageRoot.querySelectorAll('[data-moved]');
-      if(!moved.length){ alert('옮긴 항목이 없어요.'); return; }
-      if(!confirm('드래그로 옮긴 ' + moved.length + '개 항목을 원래 자리로 되돌릴까요?')) return;
+      var moved = pageRoot.querySelectorAll('[data-moved], [data-scaled]');
+      if(!moved.length){ alert('옮기거나 크기를 바꾼 항목이 없어요.'); return; }
+      if(!confirm('옮기거나 크기를 바꾼 ' + moved.length + '개 항목을 원래 위치·크기로 되돌릴까요?')) return;
       moved.forEach(function(el){
         el.style.translate = '';
+        el.style.scale = '';
+        el.style.transformOrigin = '';
         el.style.zIndex = '';
         if(el.style.position === 'relative' && !el.classList.contains('edit-repeat-child')) el.style.position = '';
         el.removeAttribute('data-moved');
-        if(el.hasAttribute('data-moved-inline')){ el.style.display = ''; el.removeAttribute('data-moved-inline'); }
+        el.removeAttribute('data-scaled');
+        dropInlineIfUnused(el);
         if(!el.getAttribute('style')) el.removeAttribute('style');
       });
+      updateHandle();
       saveSnapshot();
       showSavedToast();
     });
