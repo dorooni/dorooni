@@ -820,6 +820,7 @@
      and the ones made in the mobile editor (data-m-*, --m-* variables, data-device="m") only on phones */
   @media (min-width:721px){
     .page .edit-spacer[data-device="m"]{ display:none !important; }
+    .page [data-hide-pc]{ display:none !important; }
   }
   @media (max-width:720px){
     .page [data-moved]{ translate:none !important; }
@@ -829,6 +830,7 @@
     .page [data-m-scaled]{ scale:var(--m-sx, 1) var(--m-sy, 1) !important; transform-origin:0 0 !important; }
     .page [data-m-align]{ text-align:var(--m-ta) !important; }
     .page [data-m-jalign]{ justify-content:var(--m-jc) !important; }
+    .page [data-hide-m]{ display:none !important; }
     body.edit-mode .page [data-moved]:not([data-m-moved]){ outline:none; }
     body.edit-mode .page [data-m-moved]{ outline:1px dotted color-mix(in srgb, var(--accent) 60%, transparent); outline-offset:2px; }
   }
@@ -989,7 +991,14 @@
   .sel-toolbar button{ min-width:30px; height:30px; padding:0 8px; border-radius:8px; border:1px solid var(--line); background:transparent;
     color:var(--ink); font-size:0.82rem; font-weight:700; cursor:pointer; }
   .sel-toolbar button:hover{ border-color:var(--accent); color:var(--accent); }
-  .sel-toolbar .st-sep{ width:1px; height:20px; background:var(--line); margin:0 4px; }
+  .sel-toolbar .st-sep{ width:1px; height:20px; background:var(--line); margin:0 4px; flex:none; }
+  .sel-toolbar button{ white-space:nowrap; flex:none; }
+  .sel-toolbar .st-del:hover{ border-color:#E2495B; color:#E2495B; }
+  @media (max-width:560px){
+    .sel-toolbar{ max-width:calc(100vw - 16px); overflow-x:auto; gap:3px; padding:4px; scrollbar-width:none; }
+    .sel-toolbar .st-label{ display:none; }
+    .sel-toolbar button{ min-width:26px; height:28px; padding:0 6px; font-size:0.74rem; }
+  }
   .edit-marquee{ position:fixed; z-index:1200; pointer-events:none; border:1.5px dashed var(--accent);
     background:color-mix(in srgb, var(--accent) 14%, transparent); border-radius:4px; }
 
@@ -2522,7 +2531,7 @@
     editToast.className = 'edit-toast';
     editToast.innerHTML =
       '<span class="edit-toast-title">✎ 편집 모드</span>' +
-      '<div class="edit-help" id="editHelp"><ul><li>더블클릭: 글자 수정 (Enter 줄바꿈 · Ctrl+Enter/바깥 클릭 완료)</li><li>사진 클릭: 교체</li><li>버튼/링크 클릭: 이동 주소 설정</li><li>드래그: 위치 이동 (Shift+드래그: 박스째)</li><li>빈 곳 드래그/Ctrl+클릭: 여러 개 선택 (Ctrl+드래그: 추가 · Alt+드래그: 빼기)</li><li>방향키: 1px 이동 (Shift 10px)</li><li>빈 곳 클릭 후 Enter: 빈 줄 넣어 아래로 밀기 (Backspace: 줄이기)</li><li>선택 후 모서리 손잡이: 크기 (Shift: 비율 자유)</li><li>Ctrl+G 묶기</li><li>Ctrl+Z/Y 되돌리기/다시</li><li>Ctrl+C/X/V 복사/잘라내기/붙여넣기</li><li>Delete 삭제</li><li>선택하면 위에 뜨는 도구줄: 정렬(⬅ ⬌ ➡) · 순서(맨 앞/앞으로/뒤로/맨 뒤)</li><li>순서 단축키: Ctrl+] 앞으로 · Ctrl+[ 뒤로 · Ctrl+Shift+] 맨 앞 · Ctrl+Shift+[ 맨 뒤</li><li>모든 글 더블클릭 수정 (제목·칩·표·로고 글자 포함)</li><li>📱 모바일 편집: 휴대폰 화면의 위치·크기·빈 줄을 PC와 따로 편집</li></ul></div>' +
+      '<div class="edit-help" id="editHelp"><ul><li>더블클릭: 글자 수정 (Enter 줄바꿈 · Ctrl+Enter/바깥 클릭 완료)</li><li>사진 클릭: 교체</li><li>버튼/링크 클릭: 이동 주소 설정</li><li>드래그: 위치 이동 (Shift+드래그: 박스째)</li><li>빈 곳 드래그/Ctrl+클릭: 여러 개 선택 (Ctrl+드래그: 추가 · Alt+드래그: 빼기)</li><li>방향키: 1px 이동 (Shift 10px)</li><li>빈 곳 클릭 후 Enter: 빈 줄 넣어 아래로 밀기 (Backspace: 줄이기)</li><li>선택 후 모서리 손잡이: 크기 (Shift: 비율 자유)</li><li>Ctrl+G 묶기</li><li>Ctrl+Z/Y 되돌리기/다시</li><li>Ctrl+C/X/V 복사/잘라내기/붙여넣기</li><li>Delete 삭제</li><li>Shift+클릭: 글이 아닌 틀 상자(검은 띠·카드·줄) 선택, 다시 Shift+클릭하면 한 단계 바깥 상자</li><li>선택 도구줄 “숨기기”: 지금 화면(PC 또는 휴대폰)에서만 숨김 · 하단 “숨긴 항목 보이기”로 복구</li><li>선택하면 위에 뜨는 도구줄: 정렬(⬅ ⬌ ➡) · 순서(맨 앞/앞으로/뒤로/맨 뒤)</li><li>순서 단축키: Ctrl+] 앞으로 · Ctrl+[ 뒤로 · Ctrl+Shift+] 맨 앞 · Ctrl+Shift+[ 맨 뒤</li><li>모든 글 더블클릭 수정 (제목·칩·표·로고 글자 포함)</li><li>📱 모바일 편집: 휴대폰 화면의 위치·크기·빈 줄을 PC와 따로 편집</li></ul></div>' +
       '<button type="button" id="editToastHelp">사용법 보기</button>' +
       '<button type="button" id="editToastNav">메뉴 관리</button>' +
       '<button type="button" id="editToastExport">페이지 저장(HTML)</button>' +
@@ -2530,6 +2539,7 @@
       '<button type="button" id="editToastGroup">묶기</button>' +
       '<button type="button" id="editToastUngroup">묶기 해제</button>' +
       '<button type="button" id="editToastMoveReset">위치·크기 초기화</button>' +
+      '<button type="button" id="editToastUnhide">숨긴 항목 보이기</button>' +
       '<button type="button" id="editToastReset">되돌리기</button>' +
       '<button type="button" id="editToastClose">편집 종료</button>';
     document.body.appendChild(editToast);
@@ -3103,6 +3113,13 @@
     pageRoot.addEventListener('click', function(e){
       if(suppressClick){ e.preventDefault(); e.stopImmediatePropagation(); suppressClick = false; return; }
       if(e.target.closest && e.target.closest('[contenteditable]')) return;
+      if(e.shiftKey && !e.ctrlKey && !e.metaKey && !isEditorUi(e.target)){
+        e.preventDefault(); e.stopImmediatePropagation();
+        clearTimeout(linkClickTimer);
+        var box = pickBox(e.target);
+        if(box){ selection.forEach(function(s){ s.classList.remove('is-selected'); }); selection = []; setSelection([box]); }
+        return;
+      }
       var el = dragTargetFor(e);
       if(e.ctrlKey || e.metaKey){
         e.preventDefault(); e.stopImmediatePropagation();
@@ -3241,7 +3258,10 @@
       '<button type="button" data-z="backward" title="뒤로 (Ctrl+[)">↓</button>' +
       '<button type="button" data-z="back" title="맨 뒤로 (Ctrl+Shift+[)">⇊ 맨 뒤</button>' +
       '<span class="st-sep"></span>' +
-      '<button type="button" data-act="group" title="묶기 (Ctrl+G)">묶기</button>';
+      '<button type="button" data-act="group" title="묶기 (Ctrl+G)">묶기</button>' +
+      '<span class="st-sep"></span>' +
+      '<button type="button" data-act="hide" title="지금 보고 있는 화면(PC 또는 휴대폰)에서만 숨기기">숨기기</button>' +
+      '<button type="button" class="st-del" data-act="delete" title="삭제 (Delete) · Ctrl+Z로 되돌리기">🗑 삭제</button>';
     document.body.appendChild(selBar);
     selBar.addEventListener('mousedown', function(e){ e.preventDefault(); });
     selBar.addEventListener('click', function(e){
@@ -3250,6 +3270,8 @@
       if(b.hasAttribute('data-align')) alignSelection(b.getAttribute('data-align'));
       else if(b.hasAttribute('data-z')) zOrder(b.getAttribute('data-z'));
       else if(b.getAttribute('data-act') === 'group') groupSelection();
+      else if(b.getAttribute('data-act') === 'delete') removeSelection();
+      else if(b.getAttribute('data-act') === 'hide') hideSelection();
     });
     function updateSelBar(){
       if(!selBar) return;
@@ -3320,6 +3342,45 @@
 
     /* PowerPoint-style stacking: take everything that overlaps the selection, put the group in its current
        painting order, move the selection within it, then number the whole group so the order is explicit */
+    /* hide on the screen being edited only (phone in the mobile editor, PC otherwise) */
+    function hideSelection(){
+      if(!selection.length) return;
+      var attr = isMobileView() ? 'data-hide-m' : 'data-hide-pc';
+      var n = selection.length;
+      topLevel(selection).forEach(function(el){ el.setAttribute(attr, '1'); });
+      setSelection([]);
+      saveSnapshot();
+      flashToast(n + '개를 ' + (isMobileView() ? '휴대폰' : 'PC') + ' 화면에서 숨겼어요 (하단 "숨긴 항목 보이기"로 복구)');
+    }
+    function unhideAll(){
+      var attr = isMobileView() ? 'data-hide-m' : 'data-hide-pc';
+      var hidden = pageRoot.querySelectorAll('[' + attr + ']');
+      if(!hidden.length){ flashToast('이 화면에서 숨긴 항목이 없어요'); return; }
+      hidden.forEach(function(el){ el.removeAttribute(attr); });
+      saveSnapshot();
+      flashToast(hidden.length + '개를 다시 보이게 했어요');
+    }
+
+    /* Shift+click picks the box (band, card, row…) around the spot; each further Shift+click on it widens to the next box out */
+    var BOX_TAGS = ['div', 'section', 'header', 'nav', 'footer', 'ul', 'ol', 'li', 'table', 'aside', 'article', 'figure', 'form', 'details'];
+    function boxChainFor(node){
+      var out = [], el = node && node.nodeType === 1 ? node : node && node.parentElement;
+      while(el && el !== pageRoot && pageRoot.contains(el)){
+        if(BOX_TAGS.indexOf(el.tagName.toLowerCase()) !== -1 && !isEditorUi(el)){
+          var b = el.getBoundingClientRect();
+          if(b.width && b.height) out.push(el);
+        }
+        el = el.parentElement;
+      }
+      return out;
+    }
+    function pickBox(node){
+      var chain = boxChainFor(node);
+      if(!chain.length) return null;
+      var cur = selection.length === 1 ? chain.indexOf(selection[0]) : -1;
+      return cur === -1 ? chain[0] : (chain[cur + 1] || chain[cur]);
+    }
+
     function zOf(el){
       var z = parseInt(el.style.zIndex, 10);
       if(isNaN(z)) z = parseInt(window.getComputedStyle(el).zIndex, 10);
@@ -3364,7 +3425,7 @@
           order = below ? rest.slice(0, rest.indexOf(below)).concat(sel, rest.slice(rest.indexOf(below))) : sel.concat(rest);
         }
       }
-      var base = 2;
+      var base = 50;   /* above the sticky top menu bar (z-index 40) */
       order.forEach(function(el, i){
         if(window.getComputedStyle(el).position === 'static') el.style.position = 'relative';
         el.style.zIndex = String(base + i);
@@ -3645,6 +3706,7 @@
       }
     });
 
+    document.getElementById('editToastUnhide').addEventListener('click', function(){ unhideAll(); });
     document.getElementById('editToastMoveReset').addEventListener('click', function(){
       var mob = isMobileView();
       var where = mob ? '모바일 화면' : 'PC 화면';
