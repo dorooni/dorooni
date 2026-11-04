@@ -821,6 +821,7 @@
   @media (min-width:721px){
     .page .edit-spacer[data-device="m"]{ display:none !important; }
     .page [data-hide-pc]{ display:none !important; }
+    .page [data-blank-pc]{ background:transparent !important; border-color:transparent !important; box-shadow:none !important; }
   }
   @media (max-width:720px){
     .page [data-moved]{ translate:none !important; }
@@ -831,6 +832,7 @@
     .page [data-m-align]{ text-align:var(--m-ta) !important; }
     .page [data-m-jalign]{ justify-content:var(--m-jc) !important; }
     .page [data-hide-m]{ display:none !important; }
+    .page [data-blank-m]{ background:transparent !important; border-color:transparent !important; box-shadow:none !important; }
     body.edit-mode .page [data-moved]:not([data-m-moved]){ outline:none; }
     body.edit-mode .page [data-m-moved]{ outline:1px dotted color-mix(in srgb, var(--accent) 60%, transparent); outline-offset:2px; }
   }
@@ -981,6 +983,8 @@
   .edit-resize-label{ position:absolute; left:20px; top:-4px; white-space:nowrap; font:700 11px/1 "JetBrains Mono",monospace;
     color:#000; background:var(--accent); border-radius:6px; padding:4px 6px; pointer-events:none; }
   .edit-spacer{ display:block; }
+  body:not(.edit-mode) .page [data-link]{ cursor:pointer; }
+  body.edit-mode .page [data-link]{ outline:2px dashed #4da3ff; outline-offset:2px; }
   .edit-spacer[data-pull]{ height:0 !important; outline:none !important; background:none !important; }
   body.edit-mode .page .edit-spacer{ outline:1px dashed color-mix(in srgb, var(--accent) 45%, transparent); outline-offset:-1px;
     background:repeating-linear-gradient(135deg, transparent 0 8px, color-mix(in srgb, var(--accent) 8%, transparent) 8px 16px); }
@@ -2010,6 +2014,19 @@
   })();
 </script>
 <script>
+  /* photos and boxes given a link in the editor (data-link): a click takes visitors there */
+  document.addEventListener('click', function(e){
+    if(document.body.classList.contains('edit-mode') || !e.target.closest) return;
+    var el = e.target.closest('.page [data-link]');
+    if(!el || e.target.closest('a, button, input, select, textarea, summary')) return;
+    var href = el.getAttribute('data-link') || '';
+    if(!href || /^\s*(javascript|data|vbscript):/i.test(href)) return;
+    e.preventDefault();
+    if(el.getAttribute('data-link-blank') === '1' && href.charAt(0) !== '#') window.open(href, '_blank', 'noopener');
+    else location.href = href;
+  });
+</script>
+<script>
 (function(){
   try{
     /* edit mode only when the owner opens the page with ?edit (kept for this tab via sessionStorage) */
@@ -2246,15 +2263,24 @@
     document.body.appendChild(fileInput);
     var pendingImg = null;
 
+    function pickImageFor(img){
+      if(!img) return;
+      pendingImg = img;
+      fileInput.value = '';
+      fileInput.click();
+    }
+    /* a click selects the photo (toolbar: 사진 바꾸기 · 링크); a double click swaps it right away */
     pageRoot.addEventListener('click', function(e){
       var img = e.target.closest('img');
       if(!img || img.closest('a')) return; /* images inside links are swapped from the link editor */
       e.preventDefault();
-      e.stopPropagation();
-      pendingImg = img;
-      fileInput.value = '';
-      fileInput.click();
     });
+    pageRoot.addEventListener('dblclick', function(e){
+      var img = e.target.closest && e.target.closest('img');
+      if(!img || img.closest('a') || !pageRoot.contains(img)) return;
+      e.preventDefault(); e.stopImmediatePropagation();
+      pickImageFor(img);
+    }, true);
 
     fileInput.addEventListener('change', function(){
       var file = fileInput.files && fileInput.files[0];
@@ -2586,7 +2612,7 @@
     editToast.className = 'edit-toast';
     editToast.innerHTML =
       '<span class="edit-toast-title">✎ 편집 모드</span>' +
-      '<div class="edit-help" id="editHelp"><ul><li>더블클릭: 글자 수정 (Enter 줄바꿈 · Ctrl+Enter/바깥 클릭 완료)</li><li>사진 클릭: 교체</li><li>버튼/링크 클릭: 이동 주소 설정</li><li>드래그: 위치 이동 (Shift+드래그: 박스째)</li><li>빈 곳 드래그/Ctrl+클릭: 여러 개 선택 (Ctrl+드래그: 추가 · Alt+드래그: 빼기)</li><li>방향키: 1px 이동 (Shift 10px)</li><li>빈 곳 클릭 후 Enter: 빈 줄 넣어 아래로 밀기 (Backspace: 줄이기)</li><li>선택 후 모서리 손잡이: 크기 (Shift: 비율 자유)</li><li>Ctrl+G 묶기</li><li>Ctrl+Z/Y 되돌리기/다시</li><li>Ctrl+C/X/V 복사/잘라내기/붙여넣기</li><li>Delete 삭제</li><li>빈 곳 클릭 후 Backspace/Delete: 그 자리의 빈칸(원래 여백 포함)을 한 줄씩 지워 아래 내용을 위로 올림</li><li>빈 공간 채우기: 옮긴 항목이 남긴 빈칸·안 쓰는 빈 줄을 없애 아래 내용을 위로 올림 (지금 화면만, Ctrl+Z로 되돌리기)</li><li>Shift+클릭: 글이 아닌 틀 상자(검은 띠·카드·줄) 선택, 다시 Shift+클릭하면 한 단계 바깥 상자</li><li>선택 도구줄 “숨기기”: 지금 화면(PC 또는 휴대폰)에서만 숨김 · 하단 “숨긴 항목 보이기”로 복구</li><li>선택하면 위에 뜨는 도구줄: 정렬(⬅ ⬌ ➡) · 순서(맨 앞/앞으로/뒤로/맨 뒤)</li><li>순서 단축키: Ctrl+] 앞으로 · Ctrl+[ 뒤로 · Ctrl+Shift+] 맨 앞 · Ctrl+Shift+[ 맨 뒤</li><li>모든 글 더블클릭 수정 (제목·칩·표·로고 글자 포함)</li><li>📱 모바일 편집: 휴대폰 화면의 위치·크기·빈 줄을 PC와 따로 편집</li></ul></div>' +
+      '<div class="edit-help" id="editHelp"><ul><li>더블클릭: 글자 수정 (Enter 줄바꿈 · Ctrl+Enter/바깥 클릭 완료)</li><li>사진 클릭: 선택 → 도구줄 “🖼 사진 바꾸기” (사진 더블클릭도 교체)</li><li>사진·카드·상자에 링크: 사진 클릭(상자는 Shift+클릭)으로 선택 → 도구줄 “🔗 링크” → 주소 입력 · 방문자가 누르면 그 사이트로 이동</li><li>버튼/링크 클릭: 이동 주소 설정</li><li>드래그: 위치 이동 (Shift+드래그: 박스째)</li><li>빈 곳 드래그/Ctrl+클릭: 여러 개 선택 (Ctrl+드래그: 추가 · Alt+드래그: 빼기)</li><li>방향키: 1px 이동 (Shift 10px)</li><li>빈 곳 클릭 후 Enter: 빈 줄 넣어 아래로 밀기 (Backspace: 줄이기)</li><li>선택 후 모서리 손잡이: 크기 (Shift: 비율 자유)</li><li>Ctrl+G 묶기</li><li>Ctrl+Z/Y 되돌리기/다시</li><li>Ctrl+C/X/V 복사/잘라내기/붙여넣기</li><li>Delete 삭제</li><li>빈 곳 클릭 후 Backspace/Delete: 그 자리의 빈칸(원래 여백 포함)을 한 줄씩 지워 아래 내용을 위로 올림</li><li>빈 공간 채우기: 옮긴 항목이 남긴 빈칸·안 쓰는 빈 줄·내용이 빈 상자를 없애 아래 내용을 위로 올림 (지금 화면만, Ctrl+Z로 되돌리기)</li><li>Shift+클릭: 글이 아닌 틀 상자(검은 띠·카드·줄) 선택, 다시 Shift+클릭하면 한 단계 바깥 상자</li><li>선택 도구줄 “숨기기”: 지금 화면(PC 또는 휴대폰)에서만 숨김 · 하단 “숨긴 항목 보이기”로 복구</li><li>선택하면 위에 뜨는 도구줄: 정렬(⬅ ⬌ ➡) · 순서(맨 앞/앞으로/뒤로/맨 뒤)</li><li>순서 단축키: Ctrl+] 앞으로 · Ctrl+[ 뒤로 · Ctrl+Shift+] 맨 앞 · Ctrl+Shift+[ 맨 뒤</li><li>모든 글 더블클릭 수정 (제목·칩·표·로고 글자 포함)</li><li>📱 모바일 편집: 휴대폰 화면의 위치·크기·빈 줄을 PC와 따로 편집</li></ul></div>' +
       '<button type="button" id="editToastHelp">사용법 보기</button>' +
       '<button type="button" id="editToastNav">메뉴 관리</button>' +
       '<button type="button" id="editToastExport">페이지 저장(HTML)</button>' +
@@ -2711,6 +2737,7 @@
         '</div>' +
         '<label class="link-editor-check"><input type="checkbox" id="linkEditorBlank"> 새 창(새 탭)에서 열기</label>' +
         '<button type="button" class="link-editor-img" id="linkEditorImg">아이콘 이미지 바꾸기</button>' +
+        '<button type="button" class="link-editor-img" id="linkEditorUnlink">링크 없애기</button>' +
         '<div class="nav-editor-actions">' +
           '<button type="button" id="linkEditorTest">이동 확인</button>' +
           '<button type="button" id="linkEditorCancel">취소</button>' +
@@ -2723,6 +2750,7 @@
     var linkAnchorSel = document.getElementById('linkEditorAnchor');
     var linkBlankChk = document.getElementById('linkEditorBlank');
     var linkImgBtn = document.getElementById('linkEditorImg');
+    var linkUnlinkBtn = document.getElementById('linkEditorUnlink');
     var editingLink = null, linkClickTimer = null;
 
     function normalizeHref(raw){
@@ -2739,13 +2767,17 @@
     function openLinkEditor(a){
       if(activeEl) finishEdit(activeEl);
       editingLink = a;
-      var href = a.getAttribute('href') || '';
-      var name = (a.textContent || '').trim() || (a.querySelector('img') && a.querySelector('img').alt) || '링크';
-      document.getElementById('linkEditorName').textContent = '선택한 버튼: ' + name.replace(/\s+/g, ' ').slice(0, 40);
+      var isA = a.tagName === 'A';
+      var href = (isA ? a.getAttribute('href') : a.getAttribute('data-link')) || '';
+      var img = a.tagName === 'IMG' ? a : a.querySelector('img');
+      var name = (a.textContent || '').trim() || (img && img.alt) || (img ? '사진' : '상자');
+      document.getElementById('linkEditorName').textContent = (isA ? '선택한 버튼: ' : (img && a.tagName === 'IMG' ? '선택한 사진: ' : '선택한 상자: ')) + name.replace(/\s+/g, ' ').slice(0, 40);
       linkUrlInput.value = href;
       linkAnchorSel.value = (href.charAt(0) === '#' && linkAnchorSel.querySelector('option[value="' + href.slice(1).replace(/"/g, '') + '"]')) ? href.slice(1) : '';
-      linkBlankChk.checked = a.getAttribute('target') === '_blank';
-      linkImgBtn.style.display = a.querySelector('img') ? '' : 'none';
+      linkBlankChk.checked = isA ? a.getAttribute('target') === '_blank' : a.getAttribute('data-link-blank') === '1';
+      linkImgBtn.style.display = img ? '' : 'none';
+      linkImgBtn.textContent = isA ? '아이콘 이미지 바꾸기' : '사진 바꾸기';
+      linkUnlinkBtn.style.display = !isA && a.hasAttribute('data-link') ? '' : 'none';
       linkOverlay.classList.add('show');
       setTimeout(function(){ linkUrlInput.focus(); linkUrlInput.select(); }, 0);
     }
@@ -2770,17 +2802,36 @@
     });
     linkImgBtn.addEventListener('click', function(){
       if(!editingLink) return;
-      var img = editingLink.querySelector('img');
+      var img = editingLink.tagName === 'IMG' ? editingLink : editingLink.querySelector('img');
       if(!img) return;
       pendingImg = img;
       fileInput.value = '';
       fileInput.click();
+    });
+    linkUnlinkBtn.addEventListener('click', function(){
+      if(!editingLink || editingLink.tagName === 'A') return;
+      editingLink.removeAttribute('data-link');
+      editingLink.removeAttribute('data-link-blank');
+      closeLinkEditor();
+      updateSelBar();
+      saveSnapshot();
+      flashToast('링크를 없앴어요');
     });
     document.getElementById('linkEditorSave').addEventListener('click', function(){
       if(!editingLink) return;
       var v = normalizeHref(linkUrlInput.value);
       if(v === null){ alert('이 형식의 주소는 사용할 수 없어요. https:// 로 시작하는 주소를 넣어주세요.'); return; }
       if(!v){ alert('이동할 주소를 입력해 주세요.'); return; }
+      if(editingLink.tagName !== 'A'){
+        /* photos and boxes: the page's own script sends visitors there on click */
+        editingLink.setAttribute('data-link', v);
+        if(linkBlankChk.checked) editingLink.setAttribute('data-link-blank', '1'); else editingLink.removeAttribute('data-link-blank');
+        closeLinkEditor();
+        updateSelBar();
+        saveSnapshot();
+        flashToast('링크를 걸었어요 · 방문자가 누르면 ' + v + ' 로 이동해요');
+        return;
+      }
       editingLink.setAttribute('href', v);
       if(linkBlankChk.checked){
         editingLink.setAttribute('target', '_blank');
@@ -3185,7 +3236,7 @@
       if(!el && selection.length && !isEditorUi(e.target)) clearSelection();
       if(!isEditorUi(e.target)) setInsertPoint(e.target, e.clientY);
       /* text blocks (headings, paragraphs, chips…) are selected by a plain click; links and photos keep their own click actions */
-      if(el && !el.closest('a') && !el.closest('img') && el.tagName !== 'IMG' && !isEditorUi(e.target)) setSelection([el]);
+      if(el && !el.closest('a') && !isEditorUi(e.target)) setSelection([el]);
     }, true);
     pageRoot.addEventListener('dragstart', function(e){ e.preventDefault(); });
 
@@ -3314,6 +3365,9 @@
       '<button type="button" data-z="backward" title="뒤로 (Ctrl+[)">↓</button>' +
       '<button type="button" data-z="back" title="맨 뒤로 (Ctrl+Shift+[)">⇊ 맨 뒤</button>' +
       '<span class="st-sep"></span>' +
+      '<button type="button" data-act="photo" title="사진 바꾸기 (사진 더블클릭)">🖼 사진 바꾸기</button>' +
+      '<button type="button" data-act="link" title="누르면 원하는 사이트로 이동하게 하기">🔗 링크</button>' +
+      '<span class="st-sep"></span>' +
       '<button type="button" data-act="group" title="묶기 (Ctrl+G)">묶기</button>' +
       '<span class="st-sep"></span>' +
       '<button type="button" data-act="hide" title="지금 보고 있는 화면(PC 또는 휴대폰)에서만 숨기기">숨기기</button>' +
@@ -3328,10 +3382,32 @@
       else if(b.getAttribute('data-act') === 'group') groupSelection();
       else if(b.getAttribute('data-act') === 'delete') removeSelection();
       else if(b.getAttribute('data-act') === 'hide') hideSelection();
+      else if(b.getAttribute('data-act') === 'photo') pickImageFor(selectedImage());
+      else if(b.getAttribute('data-act') === 'link') linkSelection();
     });
+    function selectedImage(){
+      if(selection.length !== 1) return null;
+      var el = selection[0];
+      return el.tagName === 'IMG' ? el : (el.querySelectorAll('img').length === 1 ? el.querySelector('img') : null);
+    }
+    /* 🔗 링크: a photo, card or box you picked gets its own address (an existing link is edited instead) */
+    function linkSelection(){
+      if(!selection.length) return;
+      var el = topLevel(selection)[0];
+      var a = el.closest('a') || (el.tagName === 'A' ? el : null);
+      if(!a && el.querySelectorAll('a').length === 1 && el.textContent.trim() === el.querySelector('a').textContent.trim()) a = el.querySelector('a');
+      openLinkEditor(a && pageRoot.contains(a) ? a : el);
+    }
     function updateSelBar(){
       if(!selBar) return;
       if(!selection.length || resize){ selBar.classList.remove('show'); return; }
+      var photoBtn = selBar.querySelector('[data-act="photo"]');
+      if(photoBtn) photoBtn.style.display = selectedImage() ? '' : 'none';
+      var linkBtn = selBar.querySelector('[data-act="link"]');
+      if(linkBtn){
+        var lt = selection[0];
+        linkBtn.textContent = (lt.hasAttribute('data-link') || lt.closest('a')) ? '🔗 링크 수정' : '🔗 링크';
+      }
       var u = unionRect(selection);
       if(!u){ selBar.classList.remove('show'); return; }
       selBar.classList.add('show');
@@ -3411,6 +3487,7 @@
     function unhideAll(){
       var attr = isMobileView() ? 'data-hide-m' : 'data-hide-pc';
       var hidden = pageRoot.querySelectorAll('[' + attr + ']');
+      pageRoot.querySelectorAll('[' + BLANK() + ']').forEach(function(el){ el.removeAttribute(BLANK()); });
       if(!hidden.length){ flashToast('이 화면에서 숨긴 항목이 없어요'); return; }
       hidden.forEach(function(el){ el.removeAttribute(attr); });
       saveSnapshot();
@@ -3503,39 +3580,84 @@
        screen being edited (spots left by moved items and unused blank lines) that show nothing at all, and pulls the
        content below up into them. Items you moved keep the place where you put them. Normal section spacing is untouched. */
     function pageTop(r){ return r.top + window.scrollY; }
-    function contentIntervals(){
+    /* what is actually seen: text, photos, buttons, and boxes that hold something seen (with left/right too) */
+    function seenRects(){
       var out = [], vw = window.innerWidth;
+      var push = function(q){ out.push({ t: pageTop(q), b: q.bottom + window.scrollY, l: q.left, r: q.right }); };
       var w = document.createTreeWalker(pageRoot, NodeFilter.SHOW_TEXT), n;
       while((n = w.nextNode())){
-        if(!n.nodeValue.trim() || !n.parentElement || isEditorUi(n.parentElement)) continue;
+        if(!n.nodeValue.trim() || !n.parentElement || isEditorUi(n.parentElement) || foldedAway(n.parentElement)) continue;
         var rg = document.createRange(); rg.selectNodeContents(n);
-        Array.prototype.forEach.call(rg.getClientRects(), function(q){ if(q.width > 1 && q.height > 1) out.push([pageTop(q), q.bottom + window.scrollY]); });
+        Array.prototype.forEach.call(rg.getClientRects(), function(q){ if(q.width > 1 && q.height > 1) push(q); });
       }
-      pageRoot.querySelectorAll('img, svg, video, iframe, button, input, select, textarea, .btn, *').forEach(function(el){
-        if(isEditorUi(el) || el.classList.contains('edit-spacer')) return;
+      var boxes = [];
+      pageRoot.querySelectorAll('*').forEach(function(el){
+        if(isEditorUi(el) || el.classList.contains('edit-spacer') || foldedAway(el)) return;
         var tag = el.tagName.toLowerCase();
         var media = ['img', 'svg', 'video', 'iframe', 'button', 'input', 'select', 'textarea'].indexOf(tag) !== -1 || el.classList.contains('btn');
         var q = el.getBoundingClientRect();
         if(q.width < 4 || q.height < 4) return;
-        if(!media){
-          /* cards and boxes with their own background or border count, whole-width section bands do not */
-          if(q.width >= vw * 0.97 || q.height > 900) return;
-          var cs = window.getComputedStyle(el);
-          var bg = cs.backgroundColor && cs.backgroundColor !== 'rgba(0, 0, 0, 0)' && cs.backgroundColor !== 'transparent';
-          var border = parseFloat(cs.borderTopWidth) > 0 && cs.borderTopStyle !== 'none' && cs.borderTopColor !== 'rgba(0, 0, 0, 0)';
-          if(!bg && !border && cs.backgroundImage === 'none') return;
-        }
-        if(window.getComputedStyle(el).visibility === 'hidden') return;
-        out.push([pageTop(q), q.bottom + window.scrollY]);
+        var cs = window.getComputedStyle(el);
+        if(cs.visibility === 'hidden') return;
+        if(media){ push(q); return; }
+        /* cards and boxes with their own background or border, whole-width section bands do not count */
+        if(q.width >= vw * 0.97 || q.height > 900) return;
+        if(isBlanked(el)) return;
+        if(/url\(/.test(cs.backgroundImage)){ push(q); return; }
+        if(!hasLook(cs)) return;
+        if(q.height < 40) push(q); else boxes.push(q);   /* thin bars and dividers always count */
       });
+      /* a box counts only when something seen sits inside it: a box left empty (its cards moved away) is blank space */
+      var seen = out.slice();
+      boxes.forEach(function(q){ if(hasSeenInside(q, seen)) push(q); });
       /* anything you moved is content where you put it, gaps inside it included (big moved boxes such as a
          whole panel are judged by what is inside them instead) */
       allMoved().forEach(function(el){
         var q = el.getBoundingClientRect();
-        if(q.height > 1 && q.height <= 900 && q.width < vw * 0.97) out.push([pageTop(q), q.bottom + window.scrollY]);
+        if(q.height > 1 && q.height <= 900 && q.width < vw * 0.97 && (q.height < 40 || hasSeenInside(q, seen))) push(q);
       });
       return out;
     }
+    /* inside a closed fold-out (details) and not its title row: not shown, even if the browser still measures it */
+    function foldedAway(el){
+      var d = el.closest('details:not([open])');
+      while(d && pageRoot.contains(d)){
+        var sum = d.querySelector(':scope > summary');
+        if(!(sum && sum.contains(el))) return true;
+        d = d.parentElement && d.parentElement.closest('details:not([open])');
+      }
+      return false;
+    }
+    function contentIntervals(){ return seenRects().map(function(r){ return [r.t, r.b]; }); }
+    function hasLook(cs){
+      var bg = cs.backgroundColor && cs.backgroundColor !== 'rgba(0, 0, 0, 0)' && cs.backgroundColor !== 'transparent';
+      var border = parseFloat(cs.borderTopWidth) > 0 && cs.borderTopStyle !== 'none' && cs.borderTopColor !== 'rgba(0, 0, 0, 0)';
+      return bg || border || cs.backgroundImage !== 'none' || (cs.boxShadow && cs.boxShadow !== 'none');
+    }
+    function hasSeenInside(q, rects){
+      var t = pageTop(q), b = q.bottom + window.scrollY;
+      return rects.some(function(r){ return r.b > t + 1 && r.t < b - 1 && r.r > q.left + 1 && r.l < q.right - 1; });
+    }
+    var BLANK = function(){ return isMobileView() ? 'data-blank-m' : 'data-blank-pc'; };
+    function isBlanked(el){ return el.hasAttribute(BLANK()); }
+    /* boxes (with a background or border) that show nothing at all, inside `root` or around nothing:
+       these are blank space; filling them makes their background see-through on this screen */
+    function emptyBoxes(root, rects){
+      var vw = window.innerWidth, out = [];
+      var list = [root].concat(Array.prototype.slice.call(root.querySelectorAll('*')));
+      list.forEach(function(el){
+        if(el === pageRoot || isEditorUi(el) || el.classList.contains('edit-spacer') || isBlanked(el) || foldedAway(el)) return;
+        if(out.some(function(o){ return o.contains(el); })) return;
+        var q = el.getBoundingClientRect();
+        if(q.height < 40 || q.width < 40 || q.width >= vw * 0.97) return;
+        var cs = window.getComputedStyle(el);
+        if(cs.visibility === 'hidden' || /url\(/.test(cs.backgroundImage) || !hasLook(cs)) return;
+        if(['img', 'svg', 'video', 'iframe', 'button', 'input', 'select', 'textarea'].indexOf(el.tagName.toLowerCase()) !== -1) return;
+        if(!hasSeenInside(q, rects)) out.push(el);
+      });
+      return out;
+    }
+    function blankBoxes(list){ var a = BLANK(); list.forEach(function(el){ el.setAttribute(a, '1'); }); }
     function movedTops(){
       var attr = MOVED();
       var all = Array.prototype.slice.call(pageRoot.querySelectorAll('[' + attr + ']'));
@@ -3579,19 +3701,43 @@
       return best;
     }
     function findHoles(){
-      var ivs = contentIntervals(), holes = [], seen = [];
+      var rects = seenRects(), ivs = rects.map(function(r){ return [r.t, r.b]; }), holes = [], seen = [];
+      var natural = function(b){
+        var br = b.getBoundingClientRect(), bt = parseTranslate(b);
+        var bMoved = b.hasAttribute(MOVED());
+        var top = pageTop(br) - (bMoved ? bt.y : 0);
+        return [top, top + br.height / (bMoved ? (parseScale(b).y || 1) : 1)];
+      };
+      /* empty boxes inside the hole are made see-through, so the content pulled up over them is not covered */
+      var blanksIn = function(b, run){
+        return emptyBoxes(b, rects).filter(function(el){
+          var q = el.getBoundingClientRect();
+          return pageTop(q) >= run[0] - 2 && q.bottom + window.scrollY <= run[1] + 2;
+        });
+      };
       allMoved().forEach(function(el){
         var t = parseTranslate(el), sc = parseScale(el), r = el.getBoundingClientRect();
-        var natTop = pageTop(r) - t.y, natH = r.height / (sc.y || 1);
+        var natH = r.height / (sc.y || 1);
         if(Math.abs(t.y) < natH * 0.5) return;          /* still sits on its own spot */
         var b = flowBlockOf(el);
         if(!b || seen.indexOf(b) !== -1) return;
         seen.push(b);
-        var br = b.getBoundingClientRect(), bt = parseTranslate(b);
-        var bMoved = b.hasAttribute(MOVED());
-        var top = pageTop(br) - (bMoved ? bt.y : 0), bottom = top + br.height / (bMoved ? (parseScale(b).y || 1) : 1);
-        var run = emptyTail(top, bottom, ivs);
-        if(run[1] - run[0] >= 40) holes.push({ kind: 'pull', after: b, start: run[0], end: run[1] });
+        var nat = natural(b), run = emptyTail(nat[0], nat[1], ivs);
+        if(run[1] - run[0] >= 40) holes.push({ kind: 'pull', after: b, start: run[0], end: run[1], blanks: blanksIn(b, run) });
+      });
+      /* boxes with nothing inside (e.g. a card list whose cards were all moved away) are blank space too */
+      emptyBoxes(pageRoot, rects).forEach(function(box){
+        var b = flowBlockOf(box);
+        if(b && seen.indexOf(b) === -1){
+          var nat = natural(b), run = emptyTail(nat[0], nat[1], ivs);
+          if(run[1] - run[0] >= 40){
+            seen.push(b);
+            holes.push({ kind: 'pull', after: b, start: run[0], end: run[1], blanks: blanksIn(b, run).concat(b.contains(box) ? [] : [box]) });
+            return;
+          }
+        }
+        if(holes.some(function(h){ return h.blanks && h.blanks.some(function(x){ return x === box || x.contains(box); }); })) return;
+        holes.push({ kind: 'blank', el: box, start: 0, end: 0 });
       });
       pageRoot.querySelectorAll('.edit-spacer').forEach(function(sp){
         if(!isSpacer(sp)) return;
@@ -3603,6 +3749,8 @@
       return holes.sort(function(a, b){ return (b.end - b.start) - (a.end - a.start); });
     }
     function applyHole(h){
+      if(h.kind === 'blank'){ blankBoxes([h.el]); return 0; }
+      if(h.blanks) blankBoxes(h.blanks);
       var amount = Math.round(h.end - h.start);
       var point = h.kind === 'spacer' ? h.el : h.after;
       /* remember where the moved items are seen now, so they can stay put */
@@ -3642,9 +3790,9 @@
         var done = [], before = count;
         for(var i = 0; i < 60; i++){
           /* each block or blank line is handled once per round, so a hole that cannot close never loops */
-          var holes = findHoles().filter(function(h){ return done.indexOf(h.kind === 'spacer' ? h.el : h.after) === -1; });
+          var holes = findHoles().filter(function(h){ return done.indexOf(h.kind === 'pull' ? h.after : h.el) === -1; });
           if(!holes.length) break;
-          done.push(holes[0].kind === 'spacer' ? holes[0].el : holes[0].after);
+          done.push(holes[0].kind === 'pull' ? holes[0].after : holes[0].el);
           total += applyHole(holes[0]);
           count++;
         }
@@ -3680,7 +3828,9 @@
       }
       return null;
     }
+    var lastClickY = null;
     function setInsertPoint(node, y){
+      lastClickY = y + window.scrollY;
       /* clicked on the empty part of a box that stacks its children (e.g. a section's top padding):
          put the line at the nearest edge between its children, right where the click was */
       var host = node && node.nodeType === 1 ? node : node && node.parentElement;
@@ -3781,8 +3931,31 @@
       if(!isFinite(above) || !isFinite(below)) return null;
       return { top: above, bottom: below, size: below - above };
     }
+    /* clicked inside a box that shows nothing: its whole space goes at once (the box becomes see-through on this screen) */
+    function removeEmptyBoxAtClick(){
+      if(lastClickY === null) return false;
+      var y = lastClickY, rects = seenRects();
+      var box = emptyBoxes(pageRoot, rects).filter(function(el){
+        var q = el.getBoundingClientRect();
+        return pageTop(q) <= y && q.bottom + window.scrollY >= y;
+      })[0];
+      if(!box) return false;
+      var b = flowBlockOf(box);
+      if(!b) return false;
+      var br = b.getBoundingClientRect(), moved = b.hasAttribute(MOVED());
+      var top = pageTop(br) - (moved ? parseTranslate(b).y : 0);
+      var run = emptyTail(top, top + br.height / (moved ? (parseScale(b).y || 1) : 1), rects.map(function(r){ return [r.t, r.b]; }));
+      if(run[1] - run[0] < 8){ blankBoxes([box]); saveSnapshot(); return true; }
+      applyHole({ kind: 'pull', after: b, start: run[0], end: run[1], blanks: [box] });
+      lastClickY = null;
+      clearInsertPoint();
+      saveSnapshot();
+      flashToast('내용이 빈 상자 자리(' + Math.round(run[1] - run[0]) + 'px)를 지웠어요 · Ctrl+Z로 되돌리기');
+      return true;
+    }
     function removeBlank(side){
       if(shrinkBlankLine(side)) return true;
+      if(removeEmptyBoxAtClick()) return true;
       var ip = insertPoint;
       var g = gapAtCaret();
       if(!g || g.size <= 8){ flashToast('여기는 지울 빈칸이 없어요'); return false; }
