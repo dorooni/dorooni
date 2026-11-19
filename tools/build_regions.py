@@ -25,6 +25,7 @@ SITE_URL = 'https://YOUR-DOMAIN'      # 실제 도메인이 정해지면 여기�
 UPDATED = '2026년 10월 27일'
 UPDATED_ISO = '2026-10-27'
 SUFFIX = '선불폰'
+KW_PRODUCTS = ('선불유심', '알뜰폰', '선불폰')   # 키워드 끝말 (긴 것부터)
 MANIFEST = os.path.join(ROOT, 'data', 'pages.csv')
 
 SIDO_SHORT = OrderedDict([
@@ -559,9 +560,9 @@ def store_section(area, near, nodes_in):
 '''.format(a=esc(area), i=esc(intro), b=body)
 
 
-def lead_text(keyword, area_full, near):
-    s = ('<strong class="kw-inline">%s</strong> 찾으세요? %s에서 선불폰을 개통하려면 간편인증서가 있으면 비대면 셀프개통으로, '
-         % (esc(keyword), esc(area_full)))
+def lead_text(keyword, area_full, near, product=SUFFIX):
+    s = ('<strong class="kw-inline">%s</strong> 찾으세요? %s에서 %s을 개통하려면 간편인증서가 있으면 비대면 셀프개통으로, '
+         % (esc(keyword), esc(area_full), esc(product)))
     if near:
         st, tier = near[0]
         s += '없으면 %s %s에 있는 <strong>%s</strong>에서 방문 개통하면 됩니다. ' % (esc(st['sg']), esc(st['dong']), esc(st['name']))
@@ -570,8 +571,8 @@ def lead_text(keyword, area_full, near):
     return s + '<strong>신용조회 없이</strong> 본인 명의로 <strong>당일 개통</strong>되며 요금과 조건은 전국과 같습니다.'
 
 
-def desc_text(keyword, area_full, near):
-    t = '%s · %s 선불폰 당일개통. 미납·연체·신용불량도 신용조회 없이 본인 명의 개통, 간편인증서가 있으면 약 10분 셀프개통' % (keyword, area_full)
+def desc_text(keyword, area_full, near, product=SUFFIX):
+    t = '%s · %s %s 당일개통. 미납·연체·신용불량도 신용조회 없이 본인 명의 개통, 간편인증서가 있으면 약 10분 셀프개통' % (keyword, area_full, product)
     if near:
         t += ', 없으면 %s 방문 개통' % near[0][0]['name']
     return t + '.'
@@ -621,14 +622,16 @@ def keyword_page(k):
     kw = k['kw']
     note = k['note']
     area_full = note or ' · '.join(t.label() for t in targets)
-    area = kw[:-len(SUFFIX)] if kw.endswith(SUFFIX) else kw
+    # 키워드 끝말(선불폰·알뜰폰·선불유심)을 떼면 지역 이름, 끝말은 안내 문구의 상품 이름
+    product = next((p for p in KW_PRODUCTS if kw.endswith(p)), SUFFIX)
+    area = kw[:-len(product)] if kw.endswith(product) else kw
     near = nearest(targets, limit=3)
     store_count = sum(len(t.all_stores()) for t in targets)
     eyebrow = '%s · %s' % (area_full, ('방문 개통 매장 %d곳' % store_count) if store_count else ('가까운 매장 %s' % near[0][0]['name'] if near else '비대면 셀프개통'))
     chips = ['신용조회 없음', '미납·연체 OK', '월 12,100원부터', '매일 08:00~21:50']
-    title = '%s 당일개통 · %s 선불폰 개통 안내 | 루니통신' % (kw, area)
+    title = '%s 당일개통 · %s %s 개통 안내 | 루니통신' % (kw, area, product)
     faqs = common_faqs(area, near)
-    parts = [hero(kw_h1(kw), eyebrow, lead_text(kw, area_full, near), chips, near,
+    parts = [hero(kw_h1(kw), eyebrow, lead_text(kw, area_full, near, product), chips, near,
                   '<nav class="crumb" aria-label="현재 위치"><a href="../">홈</a><span>›</span><a href="../%s/">%s</a><span>›</span><span>%s</span></nav>'
                   % (esc(first.sido.slug), esc(first.sido_short), esc(kw))),
              store_section(area, near, targets)]
@@ -648,7 +651,7 @@ def keyword_page(k):
         {'@type': 'ListItem', 'position': 2, 'name': first.sido_short + ' 선불폰', 'item': '%s/%s/' % (SITE_URL, first.sido.slug)},
         {'@type': 'ListItem', 'position': 3, 'name': kw, 'item': '%s/%s/' % (SITE_URL, kw)}]}
     ld = {'@context': 'https://schema.org', '@graph': [crumb_items, faq_ld(faqs)]}
-    return head(title, desc_text(kw, area_full, near), kw, ld) + ''.join(parts) + FOOT
+    return head(title, desc_text(kw, area_full, near, product), kw, ld) + ''.join(parts) + FOOT
 
 
 def index_page():
